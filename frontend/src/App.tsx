@@ -1,122 +1,219 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect } from "react";
+import { useSimulationStore } from "./store";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const {
+    currentCycleIndex,
+    totalCycles,
+    timeline,
+    setCurrentCycleIndex,
+    isPlaying,
+    play,
+    pause,
+  } = useSimulationStore();
+
+  const currentCycle = timeline[currentCycleIndex];
+
+  useEffect(() => {
+    let interval: number | undefined;
+
+    if (isPlaying && currentCycleIndex < totalCycles - 1) {
+      interval = window.setInterval(() => {
+        setCurrentCycleIndex(currentCycleIndex + 1);
+      }, 1000);
+    } else if (isPlaying && currentCycleIndex === totalCycles - 1) {
+      pause();
+    }
+
+    return () => clearInterval(interval);
+  }, [isPlaying, currentCycleIndex, totalCycles, setCurrentCycleIndex, pause]);
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentCycleIndex(Number(e.target.value));
+  };
+
+  const progress = ((currentCycleIndex + 1) / totalCycles) * 100;
+
+  const goPrev = () => {
+    setCurrentCycleIndex(Math.max(0, currentCycleIndex - 1));
+  };
+
+  const goNext = () => {
+    setCurrentCycleIndex(Math.min(totalCycles - 1, currentCycleIndex + 1));
+  };
+
+  if (!currentCycle) {
+    return (
+      <div className="app">
+        <div className="card">Loading simulation...</div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="app">
+      <header className="topbar">
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'start'
+        }}>
+          <h1>CoreWeaver</h1>
+          <p className="subtitle">LLM Kernel Odyssey</p>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+
+        <div className="kernel-badge">mock_2x2_matmul</div>
+      </header>
+
+      <section className="progress-card">
+        <div className="progress-meta">
+          <span>Cycle Progress</span>
+          <span>
+            {currentCycleIndex + 1} / {totalCycles}
+          </span>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
+
+        <div className="progress-wrapper">
+          <div
+            className="progress-fill"
+            style={{
+              width: `${progress}%`,
+            }}
+          />
+        </div>
+      </section>
+
+      <main className="layout">
+        <aside className="sidebar">
+          <div className="card">
+            <div className="card-header">
+              <h3>Timeline</h3>
+            </div>
+
+            <div className="timeline-list">
+              {timeline.map((cycle, index) => (
+                <button
+                  key={cycle.cycle}
+                  className={`timeline-item ${
+                    index === currentCycleIndex ? "active" : ""
+                  }`}
+                  onClick={() => setCurrentCycleIndex(index)}
+                >
+                  <span>Cycle {cycle.cycle}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        <section className="content">
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <h2>Cycle {currentCycle.cycle}</h2>
+                <p className="muted">Active execution state</p>
+              </div>
+
+              <span className="badge outline">Active</span>
+            </div>
+
+            <div className="separator" />
+
+            <div className="field">
+              <label>Instruction</label>
+
+              <code className="code-block">{currentCycle.instruction}</code>
+            </div>
+
+            <div className="field-desc" >
+              <label>Description</label>
+
+              <p>{currentCycle.description}</p>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <h3>Hardware State</h3>
+            </div>
+
+            <div className="separator" />
+
+            <div className="stats-grid">
+              <div className="stat-card">
+                <span className="stat-label">Temperature</span>
+
+                <span
+                  className={`badge ${
+                    currentCycle.hardware_state.current_temperature > 90
+                      ? "destructive"
+                      : "secondary"
+                  }`}
+                >
+                  {currentCycle.hardware_state.current_temperature}
+                  °C
+                </span>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Clock Speed</span>
+
+                <span className="stat-value">
+                  {currentCycle.hardware_state.clock_speed_mhz} MHz
+                </span>
+              </div>
+
+              <div className="stat-card">
+                <span className="stat-label">Bank Conflict</span>
+
+                <span
+                  className={`badge ${
+                    currentCycle.hardware_state.bank_conflict
+                      ? "destructive"
+                      : "secondary"
+                  }`}
+                >
+                  {currentCycle.hardware_state.bank_conflict
+                    ? "Conflict"
+                    : "Clear"}
+                </span>
+              </div>
+            </div>
+
+            {currentCycle.hardware_state.conflict_details && (
+              <div className="alert">
+                {currentCycle.hardware_state.conflict_details}
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
+
+      <footer className="playback-bar">
+        <button className="button" onClick={goPrev}>
+          Prev
         </button>
-      </section>
 
-      <div className="ticks"></div>
+        <button className="button primary" onClick={isPlaying ? pause : play}>
+          {isPlaying ? "Pause" : "Play"}
+        </button>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        <button className="button" onClick={goNext}>
+          Next
+        </button>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        <input
+          className="slider"
+          type="range"
+          min="0"
+          max={totalCycles - 1}
+          value={currentCycleIndex}
+          onChange={handleSliderChange}
+        />
+      </footer>
+    </div>
+  );
 }
 
-export default App
+export default App;
