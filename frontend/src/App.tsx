@@ -10,7 +10,8 @@ import { ControlPanel } from "./ControlPanel";
 import { CrashScreen } from "./CrashScreen"; 
 import { RooflineChart } from "./RooflineChart";
 import { PipelineGantt } from './PipelineGantt';
-import { AICommandBar } from './AICommandBar'; // 👈 1. IMPORT AI BAR
+import { AICommandBar } from './AICommandBar';
+import { ComparisonView } from './ComparisionView'; 
 
 function App() {
   const { sendConfig } = useSimulationSocket();
@@ -23,16 +24,18 @@ function App() {
     isPlaying, 
     play, 
     pause,
-    metadata 
+    metadata,
+    comparisonResult 
   } = useSimulationStore();
   
   const [isRunning, setIsRunning] = useState(false);
   const [showMicroView, setShowMicroView] = useState(false);
 
-  // 👇 2. CRITICAL: The state that holds the parameters for the Control Panel
   const [simParams, setSimParams] = useState({
     M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB'
   });
+  
+  const [baselineConfig, setBaselineConfig] = useState<any | null>(null);
 
   const currentCycle = timeline[currentCycleIndex];
 
@@ -51,14 +54,35 @@ function App() {
     setTimeout(() => setIsRunning(false), 80000); 
   };
 
-  // 👇 3. CRITICAL: The function the AI calls when it extracts parameters
   const handleAICompile = (aiParams: any) => {
-    setSimParams(aiParams); // Update the UI inputs instantly
-    
-    // Automatically trigger the simulation after a tiny delay so the UI updates
+    setSimParams(aiParams);
     setTimeout(() => {
       handleRunSimulation(aiParams);
     }, 100);
+  };
+
+  // 👇 4. A/B COMPARISON HANDLERS
+  const handleSetBaseline = () => {
+    setBaselineConfig(simParams);
+  };
+
+  const handleRunComparison = async () => {
+    if (!baselineConfig) return;
+    setIsRunning(true);
+    
+    try {
+      const response = await fetch('http://localhost:8000/api/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config_a: baselineConfig, config_b: simParams }),
+      });
+      const data = await response.json();
+      useSimulationStore.getState().setComparisonResult(data);
+    } catch (err) {
+      console.error("Comparison failed", err);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   // 🛑 IDLE OR ERROR STATE
@@ -78,14 +102,16 @@ function App() {
         </header>
         
         <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '1rem' }}>
-           {/* 👇 4. ADD AI BAR HERE SO IT SHOWS ON IDLE/ERROR SCREENS TOO */}
            <AICommandBar onParamsExtracted={handleAICompile} />
 
            <ControlPanel 
              onRunSimulation={handleRunSimulation} 
              isRunning={isRunning} 
-             params={simParams}       // 👈 PASS STATE DOWN
-             setParams={setSimParams} // 👈 PASS SETTER DOWN
+             params={simParams}
+             setParams={setSimParams}
+             onSetBaseline={handleSetBaseline}
+             onRunComparison={handleRunComparison}
+             hasBaseline={!!baselineConfig}
            />
 
            {(metadata?.status === 'OOM_ERROR' || metadata?.status === 'INVALID_CONFIG') ? (
@@ -145,14 +171,16 @@ function App() {
         </aside>
 
         <section className="content">
-          {/* 👇 5. ADD AI BAR AT THE TOP OF THE DASHBOARD */}
           <AICommandBar onParamsExtracted={handleAICompile} />
 
           <ControlPanel 
             onRunSimulation={handleRunSimulation} 
             isRunning={isRunning} 
-            params={simParams}       // 👈 PASS STATE DOWN
-            setParams={setSimParams} // 👈 PASS SETTER DOWN
+            params={simParams}
+            setParams={setSimParams}
+            onSetBaseline={handleSetBaseline}
+            onRunComparison={handleRunComparison}
+            hasBaseline={!!baselineConfig}
           />
           
           <TokenStream />
@@ -215,6 +243,8 @@ function App() {
           <CodeView />
           <RooflineChart />
           <PipelineGantt />
+
+          {comparisonResult && <ComparisonView />}
         </section>
       </main>
 

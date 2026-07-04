@@ -240,3 +240,80 @@ class GPUPhysicsEngine:
                 "sram_access": sram_access
             }
         }
+    def run_single_simulation(self, params: dict):
+        """Runs a simulation and returns the result without keeping internal state."""
+        self.reset_state()
+        return self.generate_timeline(params)
+
+    def compare_configs(self, config_a: dict, config_b: dict):
+        """Runs two simulations and calculates the performance deltas."""
+        
+        # 1. Run Kernel A (Baseline)
+        result_a = self.run_single_simulation(config_a)
+        
+        # 2. Run Kernel B (Challenger)
+        result_b = self.run_single_simulation(config_b)
+        
+        # 3. Calculate Deltas (The "Who Won?" Math)
+        # We only calculate deltas if both simulations succeeded
+        status_a = result_a['metadata']['status']
+        status_b = result_b['metadata']['status']
+        
+        deltas = {
+            "status_a": status_a,
+            "status_b": status_b,
+            "cycle_delta_pct": 0.0,
+            "gflops_delta": 0.0,
+            "vram_delta_gb": 0.0,
+            "temp_delta_c": 0.0,
+            "winner": "TIE",
+            "summary": "Both kernels executed."
+        }
+
+        if status_a in ['SUCCESS', 'SUCCESS_WITH_THROTTLE'] and status_b in ['SUCCESS', 'SUCCESS_WITH_THROTTLE']:
+            cycles_a = result_a['metadata']['total_cycles']
+            cycles_b = result_b['metadata']['total_cycles']
+            
+            gflops_a = result_a['roofline_metrics']['achieved_gflops']
+            gflops_b = result_b['roofline_metrics']['achieved_gflops']
+            
+            temp_a = max(result_a['timeline'][-1]['hardware_state']['current_temperature'], 45.0)
+            temp_b = max(result_b['timeline'][-1]['hardware_state']['current_temperature'], 45.0)
+
+            # Calculate percentages (Positive means B is better/faster)
+            if cycles_a > 0:
+                deltas['cycle_delta_pct'] = round(((cycles_a - cycles_b) / cycles_a) * 100, 1)
+            
+            deltas['gflops_delta'] = round(gflops_b - gflops_a, 1)
+            deltas['temp_delta_c'] = round(temp_b - temp_a, 1)
+            
+            if result_a.get('memory_breakdown') and result_b.get('memory_breakdown'):
+                deltas['vram_delta_gb'] = round(
+                    result_b['memory_breakdown']['total_requested_gb'] - 
+                    result_a['memory_breakdown']['total_requested_gb'], 2
+                )
+
+            # Determine the Winner based on GFLOPS
+            if gflops_b > gflops_a * 1.05:
+                deltas['winner'] = "KERNEL B"
+                deltas['summary'] = f"Kernel B is faster, achieving +{deltas['gflops_delta']} GFLOP/s."
+            elif gflops_a > gflops_b * 1.05:
+                deltas['winner'] = "KERNEL A"
+                deltas['summary'] = f"Kernel A is faster. Kernel B lost {-deltas['gflops_delta']} GFLOP/s."
+            else:
+                deltas['summary'] = "Performance is virtually identical."
+                
+        elif status_a == "OOM_ERROR" and status_b in ['SUCCESS', 'SUCCESS_WITH_THROTTLE']:
+            deltas['winner'] = "KERNEL B"
+            deltas['summary'] = "Kernel A ran Out of Memory. Kernel B succeeded!"
+        elif status_b == "OOM_ERROR" and status_a in ['SUCCESS', 'SUCCESS_WITH_THROTTLE']:
+            deltas['winner'] = "KERNEL A"
+            deltas['summary'] = "Kernel B ran Out of Memory. Kernel A succeeded!"
+        elif status_a == "OOM_ERROR" and status_b == "OOM_ERROR":
+            deltas['summary'] = "Both kernels ran Out of Memory."
+
+        return {
+            "kernel_a": result_a,
+            "kernel_b": result_b,
+            "deltas": deltas
+        }

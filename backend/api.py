@@ -3,6 +3,7 @@ import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from simulator import GPUPhysicsEngine
 from groq import Groq 
 from dotenv import load_dotenv
 
@@ -23,7 +24,7 @@ app.add_middleware(
 # Initialize Groq Client
 api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
-    print("⚠️ WARNING: GROQ_API_KEY not found in .env file!")
+    print(" WARNING: GROQ_API_KEY not found in .env file!")
 
 client = Groq(api_key=api_key)
 
@@ -80,7 +81,18 @@ async def analyze_prompt(req: PromptRequest):
         raise HTTPException(status_code=500, detail="AI returned invalid JSON format.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+class CompareRequest(BaseModel):
+    config_a: dict
+    config_b: dict
 
+@app.post("/api/compare")
+async def compare_kernels(req: CompareRequest):
+    try:
+        engine = GPUPhysicsEngine()
+        result = engine.compare_configs(req.config_a, req.config_b)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 if __name__ == "__main__":
     import uvicorn
     print("CoreWeaver AI Agent (Powered by Groq) starting on http://localhost:8000")

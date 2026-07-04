@@ -4,7 +4,7 @@ import websockets
 from simulator import GPUPhysicsEngine
 
 async def simulation_handler(websocket):
-    print("🔌 Frontend connected! Waiting for simulation parameters...")
+    print("Frontend connected! Waiting for simulation parameters...")
     engine = GPUPhysicsEngine()
     
     try:
@@ -14,7 +14,7 @@ async def simulation_handler(websocket):
             
             if data.get('type') == 'CONFIG':
                 params = data['params']
-                print(f"🧮 Received Config: {params}")
+                print(f"Received Config: {params}")
                 
                 # 1. Generate the result (which might be an OOM/Config error!)
                 result = engine.generate_timeline(params)
@@ -35,12 +35,12 @@ async def simulation_handler(websocket):
                     for cycle_data in result['timeline']:
                         await websocket.send(json.dumps({"type": "CYCLE", "data": cycle_data}))
                         await asyncio.sleep(0.8) 
-                    print("✅ Simulation complete.\n")
+                    print("Simulation complete.\n")
                 else:
-                    print(f"🛑 Simulation halted: {result['metadata']['status']}\n")
+                    print(f" Simulation halted: {result['metadata']['status']}\n")
 
     except websockets.exceptions.ConnectionClosed:
-        print("❌ Frontend disconnected.")
+        print("Frontend disconnected.")
 
 async def main():
     print("CoreWeaver Physics Engine starting on ws://localhost:8765")

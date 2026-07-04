@@ -76,6 +76,10 @@ interface SimulationState {
   setMemoryBreakdown: (breakdown: MemoryBreakdown) => void;
   setRooflineMetrics: (metrics: RooflineMetrics) => void;
   clearTimeline: () => void;
+  comparisonResult: any | null;
+  setComparisonResult: (result: any) => void;
+  clearComparisonResult: () => void;
+
 }
 
 export const useSimulationStore = create<SimulationState>((set, get) => ({
@@ -110,4 +114,7 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     memoryBreakdown: null,
     rooflineMetrics: null 
   }),
+  comparisonResult: null,
+  setComparisonResult: (result) => set({ comparisonResult: result }),
+  clearComparisonResult: () => set({ comparisonResult: null }),
 }));

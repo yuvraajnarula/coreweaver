@@ -11,11 +11,21 @@ interface ControlPanelProps {
     hardware_profile: string;
   };
   setParams: (params: any) => void;
+  onSetBaseline: () => void;
+  onRunComparison: () => void;
+  hasBaseline: boolean;
 }
 
-export function ControlPanel({ onRunSimulation, isRunning, params, setParams }: ControlPanelProps) {
+export function ControlPanel({ 
+  onRunSimulation, 
+  isRunning, 
+  params, 
+  setParams,
+  onSetBaseline,
+  onRunComparison,
+  hasBaseline
+}: ControlPanelProps) {
   
-  // Helper function to update a specific parameter
   const updateParam = (key: string, value: any) => {
     setParams({ ...params, [key]: value });
   };
@@ -114,6 +124,39 @@ export function ControlPanel({ onRunSimulation, isRunning, params, setParams }: 
         >
           {isRunning ? '⏳ Simulating...' : '🚀 Compile & Run Simulation'}
         </button>
+
+        {/* 👇 A/B COMPARISON BUTTONS 👇 */}
+        <div style={{ gridColumn: 'span 4', display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+          <button 
+            type="button"
+            onClick={onSetBaseline}
+            style={{
+              flex: 1, padding: '0.75rem', 
+              background: hasBaseline ? '#0d1117' : '#21262d', 
+              color: hasBaseline ? '#3fb950' : '#58a6ff',
+              border: `1px solid ${hasBaseline ? '#3fb950' : '#58a6ff'}`, 
+              borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {hasBaseline ? '✅ Baseline (A) Set' : '📌 Save as Baseline (A)'}
+          </button>
+          <button 
+            type="button"
+            onClick={onRunComparison}
+            disabled={!hasBaseline || isRunning}
+            style={{
+              flex: 1, padding: '0.75rem', 
+              background: !hasBaseline || isRunning ? '#21262d' : '#8957e5', 
+              color: !hasBaseline || isRunning ? '#484f58' : '#fff',
+              border: 'none', borderRadius: '4px', fontWeight: 'bold', 
+              cursor: !hasBaseline || isRunning ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {isRunning ? '⏳ Comparing...' : '⚔️ Compare B against A'}
+          </button>
+        </div>
       </form>
     </div>
   );
