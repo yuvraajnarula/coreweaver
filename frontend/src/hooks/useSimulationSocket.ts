@@ -1,25 +1,41 @@
-import { useEffect } from 'react';
-import { useSimulationStore, type CycleData } from '../store';
+import { useEffect, useRef } from 'react';
+import { useSimulationStore, type CycleData, type SimulationMetadata, type MemoryBreakdown, type RooflineMetrics } from '../store';
 
 export function useSimulationSocket() {
-  const { addCycleToTimeline, setCurrentCycleIndex } = useSimulationStore();
+  const { 
+    addCycleToTimeline, 
+    setCurrentCycleIndex, 
+    clearTimeline, 
+    setMetadata, 
+    setMemoryBreakdown,
+    setRooflineMetrics 
+  } = useSimulationStore();
+  
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8765');
+    wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('connected to CoreWeaver Backend!');
+      console.log('Connected to CoreWeaver Physics Engine!');
     };
 
     ws.onmessage = (event) => {
       try {
-        const newCycle: CycleData = JSON.parse(event.data);
+        const msg = JSON.parse(event.data);
         
-        addCycleToTimeline(newCycle);
-        
-        const currentLength = useSimulationStore.getState().timeline.length;
-        setCurrentCycleIndex(currentLength - 1); 
-        
+        if (msg.type === 'METADATA') {
+          setMetadata(msg.data as SimulationMetadata);
+        } else if (msg.type === 'BREAKDOWN') {
+          setMemoryBreakdown(msg.data as MemoryBreakdown);
+        } else if (msg.type === 'ROOFLINE') {
+          setRooflineMetrics(msg.data as RooflineMetrics);
+        } else if (msg.type === 'CYCLE') {
+          addCycleToTimeline(msg.data as CycleData);
+          const currentLength = useSimulationStore.getState().timeline.length;
+          setCurrentCycleIndex(currentLength - 1); 
+        }
       } catch (error) {
         console.error('Failed to parse WebSocket message:', error);
       }
@@ -32,5 +48,23 @@ export function useSimulationSocket() {
     return () => {
       ws.close();
     };
-  }, [addCycleToTimeline, setCurrentCycleIndex]);
+  }, [addCycleToTimeline, setCurrentCycleIndex, clearTimeline, setMetadata, setMemoryBreakdown, setRooflineMetrics]);
+
+  const sendConfig = (params: any) => {
+    clearTimeline(); 
+    
+    const trySend = () => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'CONFIG', params }));
+        console.log('Sent CONFIG to backend!');
+      } else if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+        setTimeout(trySend, 100); 
+      } else {
+        console.error("WebSocket is not open!", wsRef.current?.readyState);
+      }
+    };
+    trySend();
+  };
+
+  return { sendConfig };
 }

@@ -5,6 +5,7 @@ export interface SramAccess {
   bank_id: number;
   address: number;
 }
+
 export interface CycleData {
   cycle: number;
   instruction: string;
@@ -16,10 +17,34 @@ export interface CycleData {
     clock_speed_mhz: number;
     bank_conflict: boolean;
     conflict_details?: string;
-    allocated_blocks: number[]; 
+    allocated_blocks: number[];
     thermal_map: number[];
     sram_access: SramAccess[];
   };
+}
+
+export interface SimulationMetadata {
+  status: 'SUCCESS' | 'OOM_ERROR' | 'INVALID_CONFIG' | 'SUCCESS_WITH_THROTTLE';
+  error_message?: string;
+  hardware_profile: string;
+  total_cycles: number;
+}
+
+export interface MemoryBreakdown {
+  matrix_a_gb: number;
+  matrix_b_gb: number;
+  matrix_c_gb: number;
+  total_requested_gb: number;
+  total_available_gb: number;
+  gpu_name: string;
+}
+
+export interface RooflineMetrics {
+  arithmetic_intensity: number;
+  achieved_gflops: number;
+  peak_compute_gflops: number;
+  peak_mem_bw: number;
+  ridge_point: number;
 }
 
 export type ViewMode = 'memory' | 'thermal';
@@ -29,27 +54,55 @@ interface SimulationState {
   totalCycles: number;
   timeline: CycleData[];
   setCurrentCycleIndex: (index: number) => void;
+  
+  isPlaying: boolean;
   play: () => void;
   pause: () => void;
-  isPlaying: boolean;
+
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
+  
+  metadata: SimulationMetadata | null;
+  memoryBreakdown: MemoryBreakdown | null;
+  rooflineMetrics: RooflineMetrics | null;
+  
   addCycleToTimeline: (cycle: CycleData) => void;
+  setMetadata: (meta: SimulationMetadata) => void;
+  setMemoryBreakdown: (breakdown: MemoryBreakdown) => void;
+  setRooflineMetrics: (metrics: RooflineMetrics) => void;
+  clearTimeline: () => void;
 }
 
-
-export const useSimulationStore = create<SimulationState>((set) => ({
+export const useSimulationStore = create<SimulationState>((set, get) => ({
   currentCycleIndex: 0,
   totalCycles: 0,
   timeline: [],
   setCurrentCycleIndex: (index) => set({ currentCycleIndex: index }),
+  
   isPlaying: true,
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
-  viewMode: 'memory', 
+
+  viewMode: 'memory',
   setViewMode: (mode) => set({ viewMode: mode }),
-  addCycleToTimeline: (cycle: CycleData) => set((state) => ({
+  
+  metadata: null,
+  memoryBreakdown: null,
+  rooflineMetrics: null,
+  
+  addCycleToTimeline: (cycle) => set((state) => ({
     timeline: [...state.timeline, cycle],
     totalCycles: state.totalCycles + 1,
   })),
+  setMetadata: (meta) => set({ metadata: meta, totalCycles: meta.total_cycles }),
+  setMemoryBreakdown: (breakdown) => set({ memoryBreakdown: breakdown }),
+  setRooflineMetrics: (metrics) => set({ rooflineMetrics: metrics }),
+  clearTimeline: () => set({ 
+    timeline: [], 
+    totalCycles: 0, 
+    currentCycleIndex: 0, 
+    metadata: null, 
+    memoryBreakdown: null,
+    rooflineMetrics: null 
+  }),
 }));

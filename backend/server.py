@@ -1,48 +1,51 @@
 import asyncio
 import json
 import websockets
-from simulator import GPUSimulator
+from simulator import GPUPhysicsEngine
 
-async def simulation_broadcast(websocket):
-    print("🔌 Frontend connected! Starting live simulation stream...")
+async def simulation_handler(websocket):
+    print("🔌 Frontend connected! Waiting for simulation parameters...")
+    engine = GPUPhysicsEngine()
     
-    gpu = GPUSimulator()
-    
-    MOCK_TOKENS = ["The", " future", " of", " AI", " is", " highly", " parallel", " and", " extremely", " fast", "."]
-
-    # The "Compiled" program now includes the tokens!
-    mock_compiled_program = [
-        ("LOAD_HBM", "Loading Matrix A into Shared Memory", 4, MOCK_TOKENS[0]),
-        ("LOAD_HBM", "CRITICAL: Thread 0 and Thread 1 colliding on Bank 12!", 5, MOCK_TOKENS[1]),
-        ("MMA_SYNC", "Tensor Cores executing Matrix Multiply-Accumulate", 8, MOCK_TOKENS[2]),
-        ("STALL_THERMAL", "WARNING: Temperature exceeded 95C. Throttling clock speed.", 8, MOCK_TOKENS[3]),
-        ("STORE_HBM", "Writing final result matrix back to main storage", 11, MOCK_TOKENS[4])
-    ]
-
-
-
     try:
         while True:
-            for instruction, description, source_line, token in mock_compiled_program:
-                gpu.tick(instruction, description, source_line, token)
-
-                latest_cycle = gpu.timeline[-1]
+            message = await websocket.recv()
+            data = json.loads(message)
+            
+            if data.get('type') == 'CONFIG':
+                params = data['params']
+                print(f"🧮 Received Config: {params}")
                 
-                await websocket.send(json.dumps(latest_cycle))
-                print(f" Sent Cycle {latest_cycle['cycle']} to frontend")
+                # 1. Generate the result (which might be an OOM/Config error!)
+                result = engine.generate_timeline(params)
                 
-                await asyncio.sleep(1.5) 
+                # 2. Send METADATA first
+                await websocket.send(json.dumps({"type": "METADATA", "data": result['metadata']}))
                 
-            gpu = GPUSimulator()
-            print("Simulation loop restarting...\n")
+                # 3. Send MEMORY BREAKDOWN (Useful for both Success and OOM)
+                if 'memory_breakdown' in result:
+                    await websocket.send(json.dumps({"type": "BREAKDOWN", "data": result['memory_breakdown']}))
+                
+                # 4. Stream the timeline ONLY if it's a success
+                if result['metadata']['status'] in ['SUCCESS', 'SUCCESS_WITH_THROTTLE']:
+                    # Send ROOFLINE METRICS before the cycles start
+                    if 'roofline_metrics' in result:
+                        await websocket.send(json.dumps({"type": "ROOFLINE", "data": result['roofline_metrics']}))
+                        
+                    for cycle_data in result['timeline']:
+                        await websocket.send(json.dumps({"type": "CYCLE", "data": cycle_data}))
+                        await asyncio.sleep(0.8) 
+                    print("✅ Simulation complete.\n")
+                else:
+                    print(f"🛑 Simulation halted: {result['metadata']['status']}\n")
 
     except websockets.exceptions.ConnectionClosed:
-        print("Frontend disconnected.")
+        print("❌ Frontend disconnected.")
 
 async def main():
-    print("CoreWeaver WebSocket Server starting on ws://localhost:8765")
-    async with websockets.serve(simulation_broadcast, "localhost", 8765):
-        await asyncio.Future()  # run forever
+    print("CoreWeaver Physics Engine starting on ws://localhost:8765")
+    async with websockets.serve(simulation_handler, "localhost", 8765):
+        await asyncio.Future()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -6,47 +6,79 @@ import { MemoryGrid } from "./MemoryGrid";
 import { MicroSRAMView } from "./MicroSRAMView";
 import { CodeView } from "./CodeView";
 import { TokenStream } from "./TokenStream";
+import { ControlPanel } from "./ControlPanel";
+import { CrashScreen } from "./CrashScreen"; 
+import { RooflineChart } from "./RooflineChart";
 
 function App() {
-  // 1. Initialize the live WebSocket connection!
-  useSimulationSocket();
-
-  const {
-    currentCycleIndex,
-    totalCycles,
-    timeline,
-    setCurrentCycleIndex,
-    isPlaying,
-    play,
+  const { sendConfig } = useSimulationSocket();
+  
+  const { 
+    totalCycles, 
+    timeline, 
+    currentCycleIndex, 
+    setCurrentCycleIndex, 
+    isPlaying, 
+    play, 
     pause,
+    metadata 
   } = useSimulationStore();
+  
+  const [isRunning, setIsRunning] = useState(false);
+  const [showMicroView, setShowMicroView] = useState(false);
 
   const currentCycle = timeline[currentCycleIndex];
-  const [showMicroView, setShowMicroView] = useState(false);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentCycleIndex(Number(e.target.value));
   };
 
-  // Prevent division by zero when the stream hasn't started yet
   const progress = totalCycles === 0 ? 0 : ((currentCycleIndex + 1) / totalCycles) * 100;
 
-  const goPrev = () => {
-    setCurrentCycleIndex(Math.max(0, currentCycleIndex - 1));
+  const goPrev = () => setCurrentCycleIndex(Math.max(0, currentCycleIndex - 1));
+  const goNext = () => setCurrentCycleIndex(Math.min(totalCycles - 1, currentCycleIndex + 1));
+
+  const handleRunSimulation = (params: any) => {
+    setIsRunning(true);
+    sendConfig(params);
+    setTimeout(() => setIsRunning(false), 80000); 
   };
 
-  const goNext = () => {
-    setCurrentCycleIndex(Math.min(totalCycles - 1, currentCycleIndex + 1));
-  };
-
+  // 🛑 IDLE OR ERROR STATE: Show this if the timeline is empty
   if (!currentCycle) {
     return (
       <div className="app">
-        <div className="card">Waiting for backend telemetry...</div>
+        <header className="topbar">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'start' }}>
+            <h1>CoreWeaver</h1>
+            <p className="subtitle">LLM Kernel Odyssey</p>
+          </div>
+          <div className="kernel-badge">
+            {/* 👇 2. UPDATED BADGE LOGIC */}
+            {metadata?.status === 'OOM_ERROR' ? 'CUDA OOM Error' : 
+             metadata?.status === 'INVALID_CONFIG' ? 'CUDA Config Error' : 
+             'Physics Engine Idle'}
+          </div>
+        </header>
+        
+        <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '1rem' }}>
+           <ControlPanel onRunSimulation={handleRunSimulation} isRunning={isRunning} />
+
+           {/* 👇 3. UPDATED CONDITIONAL RENDERING */}
+           {(metadata?.status === 'OOM_ERROR' || metadata?.status === 'INVALID_CONFIG') ? (
+             <CrashScreen />
+           ) : (
+             <div className="card" style={{ textAlign: 'center', padding: '3rem', marginTop: '2rem' }}>
+               <h2 style={{ color: '#00ffcc' }}>⚡ Engine Connected & Idle</h2>
+               <p style={{ color: '#888' }}>The physics engine is ready. Configure your matrix dimensions and target hardware below, then click "Compile & Run".</p>
+             </div>
+           )}
+        </div>
       </div>
     );
   }
 
+  // 🟢 ACTIVE STATE: The full dashboard (Only renders if timeline has data)
   return (
     <div className="app">
       <header className="topbar">
@@ -54,7 +86,9 @@ function App() {
           <h1>CoreWeaver</h1>
           <p className="subtitle">LLM Kernel Odyssey</p>
         </div>
-        <div className="kernel-badge">mock_2x2_matmul</div>
+        <div className="kernel-badge">
+          {metadata?.status === 'SUCCESS_WITH_THROTTLE' ? 'Throttled' : 'Parameterized Engine'}
+        </div>
       </header>
 
       <section className="progress-card">
@@ -76,7 +110,7 @@ function App() {
             <div className="timeline-list">
               {timeline.map((cycle, index) => (
                 <button
-                  key={index} // 👈 FIXED: Using the array index guarantees a unique key
+                  key={index}
                   className={`timeline-item ${index === currentCycleIndex ? "active" : ""}`}
                   onClick={() => setCurrentCycleIndex(index)}
                 >
@@ -88,41 +122,33 @@ function App() {
         </aside>
 
         <section className="content">
+          <ControlPanel onRunSimulation={handleRunSimulation} isRunning={isRunning} />
           <TokenStream />
 
-          {/* 1. CYCLE DETAILS CARD */}
           <div className="card">
             <div className="card-header">
               <div>
                 <h2>Cycle {currentCycle.cycle}</h2>
                 <p className="muted">Active execution state</p>
               </div>
-              
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <button 
-                  className="button primary" 
-                  onClick={() => setShowMicroView(true)}
-                >
+                <button className="button primary" onClick={() => setShowMicroView(true)}>
                   🔬 Zoom SRAM
                 </button>
                 <span className="badge outline">Active</span>
               </div>
             </div>
-
             <div className="separator" />
-
             <div className="field">
               <label>Instruction</label>
               <code className="code-block">{currentCycle.instruction}</code>
             </div>
-
             <div className="field-desc">
               <label>Description</label>
               <p>{currentCycle.description}</p>
             </div>
           </div>
 
-          {/* 2. HARDWARE STATE CARD */}
           <div className="card">
             <div className="card-header">
               <h3>Hardware State</h3>
@@ -154,6 +180,8 @@ function App() {
           </div>
 
           <MemoryGrid />
+          <CodeView />
+          <RooflineChart />
         </section>
       </main>
 
@@ -174,11 +202,9 @@ function App() {
         />
       </footer>
 
-      {/* 3. MICRO SRAM MODAL */}
       {showMicroView && (
         <MicroSRAMView onClose={() => setShowMicroView(false)} />
       )}
-      <CodeView />
     </div>
   );
 }
