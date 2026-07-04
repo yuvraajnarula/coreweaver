@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import mockJsonData from '../../mock_matmul.json'; 
 
+export interface SramAccess {
+  thread_id: number;
+  bank_id: number;
+  address: number;
+}
 export interface CycleData {
   cycle: number;
   instruction: string;
@@ -12,6 +17,7 @@ export interface CycleData {
     conflict_details?: string;
     allocated_blocks: number[]; 
     thermal_map: number[];
+    sram_access: SramAccess[];
   };
 }
 
