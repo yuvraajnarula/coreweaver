@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import mockJsonData from './mock_matmul.json'; 
 
 export interface SramAccess {
   thread_id: number;
@@ -10,6 +9,8 @@ export interface CycleData {
   cycle: number;
   instruction: string;
   description: string;
+  source_line: number;
+  generated_token: string;
   hardware_state: {
     current_temperature: number;
     clock_speed_mhz: number;
@@ -33,17 +34,22 @@ interface SimulationState {
   isPlaying: boolean;
   viewMode: ViewMode;
   setViewMode: (mode: ViewMode) => void;
+  addCycleToTimeline: (cycle: CycleData) => void;
 }
 
 
 export const useSimulationStore = create<SimulationState>((set) => ({
   currentCycleIndex: 0,
-  totalCycles: mockJsonData.simulation_metadata.total_cycles,
-  timeline: mockJsonData.timeline as CycleData[],
+  totalCycles: 0,
+  timeline: [],
   setCurrentCycleIndex: (index) => set({ currentCycleIndex: index }),
-  isPlaying: false,
+  isPlaying: true,
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
   viewMode: 'memory', 
   setViewMode: (mode) => set({ viewMode: mode }),
+  addCycleToTimeline: (cycle: CycleData) => set((state) => ({
+    timeline: [...state.timeline, cycle],
+    totalCycles: state.totalCycles + 1,
+  })),
 }));

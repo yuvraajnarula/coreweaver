@@ -1,10 +1,16 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSimulationStore } from "./store";
+import { useSimulationSocket } from "./hooks/useSimulationSocket";
 import "./App.css";
 import { MemoryGrid } from "./MemoryGrid";
 import { MicroSRAMView } from "./MicroSRAMView";
+import { CodeView } from "./CodeView";
+import { TokenStream } from "./TokenStream";
 
 function App() {
+  // 1. Initialize the live WebSocket connection!
+  useSimulationSocket();
+
   const {
     currentCycleIndex,
     totalCycles,
@@ -18,25 +24,12 @@ function App() {
   const currentCycle = timeline[currentCycleIndex];
   const [showMicroView, setShowMicroView] = useState(false);
 
-  useEffect(() => {
-    let interval: number | undefined;
-
-    if (isPlaying && currentCycleIndex < totalCycles - 1) {
-      interval = window.setInterval(() => {
-        setCurrentCycleIndex(currentCycleIndex + 1);
-      }, 1000);
-    } else if (isPlaying && currentCycleIndex === totalCycles - 1) {
-      pause();
-    }
-
-    return () => clearInterval(interval);
-  }, [isPlaying, currentCycleIndex, totalCycles, setCurrentCycleIndex, pause]);
-
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentCycleIndex(Number(e.target.value));
   };
 
-  const progress = ((currentCycleIndex + 1) / totalCycles) * 100;
+  // Prevent division by zero when the stream hasn't started yet
+  const progress = totalCycles === 0 ? 0 : ((currentCycleIndex + 1) / totalCycles) * 100;
 
   const goPrev = () => {
     setCurrentCycleIndex(Math.max(0, currentCycleIndex - 1));
@@ -49,7 +42,7 @@ function App() {
   if (!currentCycle) {
     return (
       <div className="app">
-        <div className="card">Loading simulation...</div>
+        <div className="card">Waiting for backend telemetry...</div>
       </div>
     );
   }
@@ -83,7 +76,7 @@ function App() {
             <div className="timeline-list">
               {timeline.map((cycle, index) => (
                 <button
-                  key={cycle.cycle}
+                  key={index} // 👈 FIXED: Using the array index guarantees a unique key
                   className={`timeline-item ${index === currentCycleIndex ? "active" : ""}`}
                   onClick={() => setCurrentCycleIndex(index)}
                 >
@@ -95,6 +88,8 @@ function App() {
         </aside>
 
         <section className="content">
+          <TokenStream />
+
           {/* 1. CYCLE DETAILS CARD */}
           <div className="card">
             <div className="card-header">
@@ -103,7 +98,6 @@ function App() {
                 <p className="muted">Active execution state</p>
               </div>
               
-              {/* 👇 ADDED: The Zoom Button next to the Active badge 👇 */}
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button 
                   className="button primary" 
@@ -159,7 +153,6 @@ function App() {
             )}
           </div>
 
-          {/* 👇 MOVED: Memory Grid is now inside the content section, below the cards 👇 */}
           <MemoryGrid />
         </section>
       </main>
@@ -174,9 +167,10 @@ function App() {
           className="slider"
           type="range"
           min="0"
-          max={totalCycles - 1}
+          max={Math.max(0, totalCycles - 1)}
           value={currentCycleIndex}
           onChange={handleSliderChange}
+          disabled={totalCycles === 0}
         />
       </footer>
 
@@ -184,6 +178,7 @@ function App() {
       {showMicroView && (
         <MicroSRAMView onClose={() => setShowMicroView(false)} />
       )}
+      <CodeView />
     </div>
   );
 }

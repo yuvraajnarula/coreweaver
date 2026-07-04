@@ -81,3 +81,13 @@ When these 32 threads need to load data from Shared Memory (SRAM) into their reg
 #### The Performance Penalty
 1. A bank conflict literally halves (or worse) the memory bandwidth of the chip. It is one of the most common reasons CUDA/Triton kernels run slowly.
 2. **Visualising :** In coreweaver, the microview renders the 32 physical memory banks. When a `LOAD_HBM` instruction happens, we light up the specific bank being accessed. If the backend detects that 2 threads mapped to the same bank in the same cycle, it affected bank literally pulses neon red, visualizng the hardware pipeline stall.
+
+### Lesson 5 : The simulation state machine
+
+A hardware simulator is not just a random number generator. It is a **State Machine**.
+It has a current state (temperatures, allocated memory, clock speed), it receives an input (an instruction like LOAD_HBM), and it calculates the next state based on physical rules.
+
+**The Golden Rule of Simulation:**
+`Current State + Instruction + Physical Rules = Next State`
+
+We are going to build a Python script that acts as our "Mock Compiler" and "Physical Engine" combined. It will take a list of instructions, simulate the physics of the GPU cycle-by-cycle, and output the exact JSON your React frontend is expecting.

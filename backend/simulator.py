@@ -39,7 +39,7 @@ class GPUSimulator:
         new_map = [max(35.0, t - 2.0) for t in new_map]
         self.thermal_map = new_map
 
-    def tick(self, instruction: str, description: str):
+    def tick(self, instruction: str, description: str, source_line: int, token : int):
         self.cycle_count += 1
         bank_conflict = False
         conflict_details = ""
@@ -88,6 +88,8 @@ class GPUSimulator:
             "cycle": self.cycle_count,
             "instruction": instruction,
             "description": description,
+            "source_line": source_line, 
+            "generated_token": token,
             "source": "HBM_ADDR_0x1000", # Mocked for now
             "destination": "SRAM_BANK_0", # Mocked for now
             "data_payload": [1.0, 2.0],   # Mocked for now
