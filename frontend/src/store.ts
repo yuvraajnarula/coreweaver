@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import mockJsonData from '../../mock_matmul.json'; 
+import mockJsonData from './mock_matmul.json'; 
 
 export interface SramAccess {
   thread_id: number;
