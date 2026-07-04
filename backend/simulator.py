@@ -10,7 +10,6 @@ HARDWARE_PROFILES = {
     "T4_16GB": {"vram_gb": 16.0, "name": "NVIDIA T4 16GB", "bandwidth": 320, "sram_kb": 96, "peak_tflops": 65.0}
 }
 
-# Mock constants for cycle calculation
 BYTES_PER_CYCLE = 1500 
 FLOPS_PER_CYCLE = 200000 
 
@@ -34,6 +33,7 @@ class GPUPhysicsEngine:
         self.thermal_map = [45.0] * 100
         self.timeline = []
         self.cycle_count = 0
+        self.params = {}
 
     def calculate_thermal_diffusion(self, heat_source_indices, heat_amount):
         new_map = self.thermal_map.copy()
@@ -46,7 +46,6 @@ class GPUPhysicsEngine:
                         new_map[n[0]*10 + n[1]] += (heat_amount * 0.2)
         self.thermal_map = [max(35.0, t - 1.5) for t in new_map]
 
-    # 🛡️ PILLAR 2: THE VALIDATION BOUNCER
     def validate_config(self, params, gpu_specs):
         M, N, K = params['M'], params['N'], params['K']
         BLOCK_SIZE = params['BLOCK_SIZE']
@@ -54,7 +53,7 @@ class GPUPhysicsEngine:
         if M <= 0 or N <= 0 or K <= 0:
             return False, "Matrix dimensions (M, N, K) must be strictly greater than 0."
         if BLOCK_SIZE % 32 != 0:
-            return False, f"BLOCK_SIZE ({BLOCK_SIZE}) is not a multiple of the hardware Warp Size (32). GPUs execute threads in lockstep groups of 32; partial warps waste silicon cycles."
+            return False, f"BLOCK_SIZE ({BLOCK_SIZE}) is not a multiple of the hardware Warp Size (32)."
         if BLOCK_SIZE > 1024:
             return False, f"BLOCK_SIZE ({BLOCK_SIZE}) exceeds the absolute hardware limit of 1024 threads per block."
         
@@ -63,84 +62,70 @@ class GPUPhysicsEngine:
         max_sram_kb = gpu_specs['sram_kb']
         
         if sram_kb_needed > max_sram_kb:
-            return False, f"Block requires {sram_kb_needed:.1f} KB of Shared Memory (SRAM) to hold the tiles, but the {gpu_specs['name']} only has {max_sram_kb} KB per SM. Reduce BLOCK_SIZE to fit in SRAM."
+            return False, f"Block requires {sram_kb_needed:.1f} KB of Shared Memory (SRAM), but {gpu_specs['name']} only has {max_sram_kb} KB per SM."
             
         return True, ""
 
     def generate_timeline(self, params: dict):
         self.reset_state()
+        self.params = params
         
         hardware_key = params.get('hardware_profile', 'A100_80GB')
         gpu_specs = HARDWARE_PROFILES.get(hardware_key, HARDWARE_PROFILES['A100_80GB'])
         
-        # 🛑 STOP 1: Validate the configuration against physical laws
         is_valid, error_msg = self.validate_config(params, gpu_specs)
         if not is_valid:
             return {
-                "metadata": {
-                    "status": "INVALID_CONFIG",
-                    "error_message": error_msg,
-                    "hardware_profile": hardware_key,
-                    "total_cycles": 0
-                },
+                "metadata": {"status": "INVALID_CONFIG", "error_message": error_msg, "hardware_profile": hardware_key, "total_cycles": 0},
                 "timeline": []
             }
 
         M, N, K = params['M'], params['N'], params['K']
         BLOCK_SIZE = params['BLOCK_SIZE']
         
-        # 🛑 STOP 2: Memory Capacity Guard (OOM CHECK)
         available_vram_gb = gpu_specs['vram_gb'] * 0.95 
-        bytes_a = (M * K) * 2
-        bytes_b = (K * N) * 2
-        bytes_c = (M * N) * 2
+        bytes_a, bytes_b, bytes_c = (M * K) * 2, (K * N) * 2, (M * N) * 2
         total_bytes = bytes_a + bytes_b + bytes_c
         total_flops = 2 * M * N * K
         total_requested_gb = total_bytes / (1024**3)
         
         memory_breakdown = {
-            "matrix_a_gb": round(bytes_a / (1024**3), 2),
-            "matrix_b_gb": round(bytes_b / (1024**3), 2),
-            "matrix_c_gb": round(bytes_c / (1024**3), 2),
-            "total_requested_gb": round(total_requested_gb, 2),
-            "total_available_gb": round(available_vram_gb, 2),
-            "gpu_name": gpu_specs['name']
+            "matrix_a_gb": round(bytes_a / (1024**3), 2), "matrix_b_gb": round(bytes_b / (1024**3), 2),
+            "matrix_c_gb": round(bytes_c / (1024**3), 2), "total_requested_gb": round(total_requested_gb, 2),
+            "total_available_gb": round(available_vram_gb, 2), "gpu_name": gpu_specs['name']
         }
 
         if total_requested_gb > available_vram_gb:
             return {
-                "metadata": {
-                    "status": "OOM_ERROR",
-                    "error_message": f"CUDA Out of Memory. Requested {total_requested_gb:.2f} GB, but only {available_vram_gb:.2f} GB is available on the {gpu_specs['name']}.",
-                    "hardware_profile": hardware_key,
-                    "total_cycles": 0
-                },
-                "memory_breakdown": memory_breakdown,
-                "timeline": []
+                "metadata": {"status": "OOM_ERROR", "error_message": f"CUDA Out of Memory. Requested {total_requested_gb:.2f} GB, but only {available_vram_gb:.2f} GB is available.", "hardware_profile": hardware_key, "total_cycles": 0},
+                "memory_breakdown": memory_breakdown, "timeline": []
             }
 
-        # --- IF WE PASS BOTH GUARDS, PROCEED WITH PHYSICS ---
-        
         total_vram_gb_visual = (total_bytes / 1e9) * 10 
         blocks_needed = min(100, max(1, int(total_vram_gb_visual))) 
-        
         has_conflict = (BLOCK_SIZE == 64 and K % 32 != 0) 
+        
         true_mem_cycles = total_bytes / BYTES_PER_CYCLE
         true_compute_cycles = total_flops / FLOPS_PER_CYCLE
         true_total_cycles = true_mem_cycles + true_compute_cycles + 2
 
-        MIN_VISUAL = 20
-        MAX_VISUAL = 100
+        MIN_VISUAL, MAX_VISUAL = 20, 100
         dynamic_cycles = MIN_VISUAL + int(total_flops / 1e9)
         total_visual_cycles = min(MAX_VISUAL, max(MIN_VISUAL, dynamic_cycles))
-        compression_ratio = true_total_cycles / total_visual_cycles
 
-        load_cycles = int((true_mem_cycles / true_total_cycles) * total_visual_cycles)
-        math_cycles = total_visual_cycles - load_cycles - 2 
-        load_cycles = max(2, load_cycles)
-        math_cycles = max(2, math_cycles)
+        load_cycles = max(2, int((true_mem_cycles / true_total_cycles) * total_visual_cycles))
+        math_cycles = max(2, total_visual_cycles - load_cycles - 2)
 
-        heat_per_load = 2.0 * compression_ratio 
+        # --- FIXED THERMAL MATH (Bounded Physics) ---
+        total_gflops = total_flops / 1e9
+        target_temp_rise_math = min(70.0, total_gflops * 5.0) 
+        heat_per_math_cycle = target_temp_rise_math / math_cycles if math_cycles > 0 else 0
+        
+        total_gb = total_bytes / 1e9
+        target_temp_rise_load = min(20.0, total_gb * 2.0) 
+        heat_per_load = target_temp_rise_load / load_cycles if load_cycles > 0 else 0
+        heat_per_store = 3.0 
+
         for i in range(load_cycles):
             self.cycle_count += 1
             self.allocated_blocks = list(range(int((i+1)/load_cycles * blocks_needed)))
@@ -149,14 +134,13 @@ class GPUPhysicsEngine:
             self.timeline.append(self._build_cycle("LOAD_HBM", "Loading tiles from HBM to SRAM", 7, sram, has_conflict and i==1))
 
         tensor_cores = [33, 34, 43, 44]
-        heat_per_math_cycle = (true_compute_cycles / total_visual_cycles) * 15.0 * compression_ratio 
         for i in range(math_cycles):
             self.cycle_count += 1
             self.calculate_thermal_diffusion(tensor_cores, heat_per_math_cycle)
             self.timeline.append(self._build_cycle("MMA_SYNC", "Tensor Cores executing MAC operations", 11, [], False))
 
         self.cycle_count += 1
-        self.calculate_thermal_diffusion([80, 81], 3.0 * compression_ratio)
+        self.calculate_thermal_diffusion([80, 81], heat_per_store)
         self.timeline.append(self._build_cycle("STORE_HBM", "Writing result matrix to HBM", 14, [], False))
 
         max_temp = max(self.thermal_map)
@@ -169,32 +153,17 @@ class GPUPhysicsEngine:
             self.timeline.append(self._build_cycle("STALL_THERMAL", "CRITICAL: Thermal limit reached. Clock throttled.", 11, [], False))
             self.clock_speed = 1500
 
-                # --- STRICT ROOFLINE MODEL MATH ---
-        # 1. Convert Peak Compute to GFLOPS to match the Y-axis units
-        peak_compute_gflops = gpu_specs['peak_tflops'] * 1000 
-        peak_mem_bw = gpu_specs['bandwidth'] # GB/s
-        
-        # 2. Calculate the Ridge Point (The transition from Memory Bound to Compute Bound)
-        ridge_point = peak_compute_gflops / peak_mem_bw 
-        
-        # 3. Calculate Arithmetic Intensity (FLOP / Byte)
         arithmetic_intensity = total_flops / total_bytes if total_bytes > 0 else 0
+        peak_compute_gflops = gpu_specs['peak_tflops'] * 1000 
+        peak_mem_bw = gpu_specs['bandwidth'] 
         
-        # 4. Calculate ACTUAL Achieved Performance (The "Realism" Factor)
-        # No kernel achieves 100% efficiency. We start with a realistic 85% base.
-        efficiency = 0.85 
+        # Roofline calculation incorporating efficiency penalties for the final achieved metric
+        efficiency = 0.85
+        if has_conflict: efficiency *= 0.5
+        if status == "SUCCESS_WITH_THROTTLE": efficiency *= 0.6
         
-        # Apply physical penalties based on our simulation!
-        if has_conflict:
-            efficiency *= 0.5  # Bank conflicts destroy memory throughput
-        if status == "SUCCESS_WITH_THROTTLE":
-            efficiency *= 0.6  # Thermal throttling drops compute throughput
-            
-        # The actual performance is bounded by the hardware ceilings, scaled by efficiency
         mem_achieved = arithmetic_intensity * peak_mem_bw 
         compute_achieved = peak_compute_gflops * efficiency
-        
-        # The kernel achieves the minimum of the memory ceiling or compute ceiling
         achieved_gflops = min(mem_achieved, compute_achieved)
 
         roofline_metrics = {
@@ -202,14 +171,11 @@ class GPUPhysicsEngine:
             "achieved_gflops": round(achieved_gflops, 2),
             "peak_compute_gflops": peak_compute_gflops,
             "peak_mem_bw": peak_mem_bw,
-            "ridge_point": round(ridge_point, 2)
+            "ridge_point": round(peak_compute_gflops / peak_mem_bw, 2)
         }
+
         return {
-            "metadata": {
-                "status": status,
-                "hardware_profile": hardware_key,
-                "total_cycles": self.cycle_count
-            },
+            "metadata": {"status": status, "hardware_profile": hardware_key, "total_cycles": self.cycle_count},
             "memory_breakdown": memory_breakdown,
             "roofline_metrics": roofline_metrics,
             "timeline": self.timeline
@@ -220,12 +186,50 @@ class GPUPhysicsEngine:
         max_temp = max(self.thermal_map)
         token_idx = min(self.cycle_count - 1, len(MOCK_TOKENS) - 1)
 
+        pipeline_trace = [
+            {"stage": "FETCH", "cycles": 4, "status": "NORMAL"},
+            {"stage": "DECODE", "cycles": 4, "status": "NORMAL"},
+            {"stage": "EXECUTE", "cycles": 10, "status": "NORMAL"},
+            {"stage": "MEMORY", "cycles": 10, "status": "NORMAL"},
+            {"stage": "WRITEBACK", "cycles": 4, "status": "NORMAL"}
+        ]
+
+        if instruction in ["LOAD_HBM", "STORE_HBM"]:
+            pipeline_trace[3]["cycles"] = 400
+            pipeline_trace[3]["stage"] = "MEMORY (VRAM)"
+        elif instruction == "MMA_SYNC":
+            block_size = self.params.get('BLOCK_SIZE', 128)
+            math_cycles = max(20, int((block_size / 16) * 10))
+            pipeline_trace[2]["cycles"] = math_cycles
+            pipeline_trace[2]["stage"] = "EXECUTE (Tensor)"
+
+        if bank_conflict:
+            block_size = self.params.get('BLOCK_SIZE', 128)
+            conflict_penalty = max(1, block_size // 32) * 50
+            pipeline_trace[3]["cycles"] += conflict_penalty
+            pipeline_trace[3]["status"] = "CONFLICT"
+            
+        if instruction == "STALL_THERMAL":
+            pipeline_trace[2]["cycles"] = 0
+            pipeline_trace[3]["cycles"] = 0
+            pipeline_trace.insert(2, {"stage": "NOP (Thermal Bubble)", "cycles": 300, "status": "STALL"})
+
+        total_latency = sum(stage["cycles"] for stage in pipeline_trace)
+        bubble_cycles = sum(stage["cycles"] for stage in pipeline_trace if stage["status"] in ["STALL", "CONFLICT"])
+        efficiency_pct = round(((total_latency - bubble_cycles) / total_latency) * 100, 1) if total_latency > 0 else 100.0
+
         return {
             "cycle": self.cycle_count,
             "instruction": instruction,
             "description": description,
             "source_line": source_line,
             "generated_token": MOCK_TOKENS[token_idx],
+            "pipeline_trace": pipeline_trace,
+            "pipeline_metrics": {
+                "total_latency": total_latency,
+                "bubble_cycles": bubble_cycles,
+                "efficiency_pct": efficiency_pct
+            },
             "hardware_state": {
                 "current_temperature": round(max_temp, 1),
                 "clock_speed_mhz": self.clock_speed,

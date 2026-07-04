@@ -5,13 +5,18 @@ export interface SramAccess {
   bank_id: number;
   address: number;
 }
-
+export interface PipelineStage {
+  stage: 'FETCH' | 'DECODE' | 'EXECUTE' | 'MEMORY' | 'WRITEBACK';
+  cycles: number;
+  status: 'NORMAL' | 'STALL' | 'SLOW' | 'CONFLICT';
+}
 export interface CycleData {
   cycle: number;
   instruction: string;
   description: string;
   source_line: number;
   generated_token: string;
+  pipeline_trace: PipelineStage[];
   hardware_state: {
     current_temperature: number;
     clock_speed_mhz: number;

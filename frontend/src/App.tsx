@@ -9,6 +9,8 @@ import { TokenStream } from "./TokenStream";
 import { ControlPanel } from "./ControlPanel";
 import { CrashScreen } from "./CrashScreen"; 
 import { RooflineChart } from "./RooflineChart";
+import { PipelineGantt } from './PipelineGantt';
+import { AICommandBar } from './AICommandBar'; // 👈 1. IMPORT AI BAR
 
 function App() {
   const { sendConfig } = useSimulationSocket();
@@ -27,6 +29,11 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [showMicroView, setShowMicroView] = useState(false);
 
+  // 👇 2. CRITICAL: The state that holds the parameters for the Control Panel
+  const [simParams, setSimParams] = useState({
+    M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB'
+  });
+
   const currentCycle = timeline[currentCycleIndex];
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,7 +51,17 @@ function App() {
     setTimeout(() => setIsRunning(false), 80000); 
   };
 
-  // 🛑 IDLE OR ERROR STATE: Show this if the timeline is empty
+  // 👇 3. CRITICAL: The function the AI calls when it extracts parameters
+  const handleAICompile = (aiParams: any) => {
+    setSimParams(aiParams); // Update the UI inputs instantly
+    
+    // Automatically trigger the simulation after a tiny delay so the UI updates
+    setTimeout(() => {
+      handleRunSimulation(aiParams);
+    }, 100);
+  };
+
+  // 🛑 IDLE OR ERROR STATE
   if (!currentCycle) {
     return (
       <div className="app">
@@ -54,7 +71,6 @@ function App() {
             <p className="subtitle">LLM Kernel Odyssey</p>
           </div>
           <div className="kernel-badge">
-            {/* 👇 2. UPDATED BADGE LOGIC */}
             {metadata?.status === 'OOM_ERROR' ? 'CUDA OOM Error' : 
              metadata?.status === 'INVALID_CONFIG' ? 'CUDA Config Error' : 
              'Physics Engine Idle'}
@@ -62,15 +78,22 @@ function App() {
         </header>
         
         <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '1rem' }}>
-           <ControlPanel onRunSimulation={handleRunSimulation} isRunning={isRunning} />
+           {/* 👇 4. ADD AI BAR HERE SO IT SHOWS ON IDLE/ERROR SCREENS TOO */}
+           <AICommandBar onParamsExtracted={handleAICompile} />
 
-           {/* 👇 3. UPDATED CONDITIONAL RENDERING */}
+           <ControlPanel 
+             onRunSimulation={handleRunSimulation} 
+             isRunning={isRunning} 
+             params={simParams}       // 👈 PASS STATE DOWN
+             setParams={setSimParams} // 👈 PASS SETTER DOWN
+           />
+
            {(metadata?.status === 'OOM_ERROR' || metadata?.status === 'INVALID_CONFIG') ? (
              <CrashScreen />
            ) : (
              <div className="card" style={{ textAlign: 'center', padding: '3rem', marginTop: '2rem' }}>
                <h2 style={{ color: '#00ffcc' }}>⚡ Engine Connected & Idle</h2>
-               <p style={{ color: '#888' }}>The physics engine is ready. Configure your matrix dimensions and target hardware below, then click "Compile & Run".</p>
+               <p style={{ color: '#888' }}>The physics engine is ready. Use the AI Compiler above or configure parameters manually, then click "Compile & Run".</p>
              </div>
            )}
         </div>
@@ -78,7 +101,7 @@ function App() {
     );
   }
 
-  // 🟢 ACTIVE STATE: The full dashboard (Only renders if timeline has data)
+  // 🟢 ACTIVE STATE
   return (
     <div className="app">
       <header className="topbar">
@@ -122,7 +145,16 @@ function App() {
         </aside>
 
         <section className="content">
-          <ControlPanel onRunSimulation={handleRunSimulation} isRunning={isRunning} />
+          {/* 👇 5. ADD AI BAR AT THE TOP OF THE DASHBOARD */}
+          <AICommandBar onParamsExtracted={handleAICompile} />
+
+          <ControlPanel 
+            onRunSimulation={handleRunSimulation} 
+            isRunning={isRunning} 
+            params={simParams}       // 👈 PASS STATE DOWN
+            setParams={setSimParams} // 👈 PASS SETTER DOWN
+          />
+          
           <TokenStream />
 
           <div className="card">
@@ -182,6 +214,7 @@ function App() {
           <MemoryGrid />
           <CodeView />
           <RooflineChart />
+          <PipelineGantt />
         </section>
       </main>
 
