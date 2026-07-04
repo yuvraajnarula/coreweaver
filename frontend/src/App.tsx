@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useSimulationStore } from "./store";
 import "./App.css";
+import { MemoryGrid } from "./MemoryGrid";
 
 function App() {
   const {
@@ -212,6 +213,7 @@ function App() {
           onChange={handleSliderChange}
         />
       </footer>
+      <MemoryGrid />
     </div>
   );
 }
