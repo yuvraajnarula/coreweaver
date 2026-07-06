@@ -38,7 +38,7 @@ export function CodeView() {
       marginTop: '1rem'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid #333', paddingBottom: '0.5rem' }}>
-        <span style={{ color: '#888' }}>📄 kernel_matmul.py (Triton)</span>
+        <span style={{ color: '#888' }}>kernel_matmul.py (Triton)</span>
         <span style={{ color: '#00ffcc', fontWeight: 'bold' }}>
           Executing Line: {currentCycle?.source_line || '-'}
         </span>

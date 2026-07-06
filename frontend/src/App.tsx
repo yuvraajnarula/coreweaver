@@ -14,6 +14,7 @@ import { AICommandBar } from './AICommandBar';
 import { ComparisonView } from './ComparisionView'; 
 import { WarpDivergenceView } from "./WarpDivergence";
 import { SiliconTelemetry } from "./SiliconTelemetry";
+import { ModernExecutionView } from "./ModernExecutionView";
 
 function App() {
   const { sendConfig } = useSimulationSocket();
@@ -35,7 +36,7 @@ function App() {
 
   const [simParams, setSimParams] = useState({
     M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB',
-    enable_divergence: false, coalesced_memory: true 
+    enable_divergence: false, coalesced_memory: true , enable_fusion: false
   });
   
   const [baselineConfig, setBaselineConfig] = useState<any | null>(null);
@@ -121,7 +122,7 @@ function App() {
              <CrashScreen />
            ) : (
              <div className="card" style={{ textAlign: 'center', padding: '3rem', marginTop: '2rem' }}>
-               <h2 style={{ color: '#00ffcc' }}>⚡ Engine Connected & Idle</h2>
+               <h2 style={{ color: '#00ffcc' }}>Engine Connected & Idle</h2>
                <p style={{ color: '#888' }}>The physics engine is ready. Use the AI Compiler above or configure parameters manually, then click "Compile & Run".</p>
              </div>
            )}
@@ -247,7 +248,9 @@ function App() {
           <SiliconTelemetry />
           <WarpDivergenceView />
           <RooflineChart />
+          <ModernExecutionView />
           <PipelineGantt />
+          
 
           {comparisonResult && <ComparisonView />}
         </section>

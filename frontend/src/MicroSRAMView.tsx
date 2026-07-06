@@ -36,21 +36,21 @@ export function MicroSRAMView({ onClose }: { onClose: () => void }) {
         
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
           <div>
-            <h2 style={{ margin: 0, color: '#00ffcc' }}>🔬 Micro View: SM Shared Memory (SRAM)</h2>
+            <h2 style={{ margin: 0, color: '#00ffcc' }}>Micro View: SM Shared Memory (SRAM)</h2>
             <p style={{ margin: '0.5rem 0 0', color: '#888' }}>Cycle {currentCycle?.cycle}: {currentCycle?.instruction}</p>
           </div>
           <button 
             onClick={onClose}
             style={{ background: '#e74c3c', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', height: 'fit-content' }}
           >
-            ✕ Close Zoom
+            Close Zoom
           </button>
         </div>
 
         {/* Conflict Warning Badge */}
         {hasConflict && (
           <div style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', textAlign: 'center' }}>
-            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#ff7675' }}>⚠️ WARNING: BANK CONFLICT DETECTED! Serialized memory access causing pipeline stalls.</span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#ff7675' }}>WARNING: BANK CONFLICT DETECTED! Serialized memory access causing pipeline stalls.</span>
           </div>
         )}
 

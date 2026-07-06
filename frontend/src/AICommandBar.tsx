@@ -47,7 +47,7 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
       border: '1px solid #30363d', marginBottom: '1rem' 
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-        <span style={{ fontSize: '1.2rem' }}>🤖</span>
+        <span style={{ fontSize: '1.2rem' }}>AI</span>
         <h3 style={{ margin: 0, color: '#c9d1d9', fontSize: '1rem' }}>AI Hardware Compiler</h3>
         <span style={{ fontSize: '0.75rem', color: '#8b949e', background: '#21262d', padding: '2px 6px', borderRadius: '4px' }}>
           Describe your workload in plain English
@@ -75,13 +75,13 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
             cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '0.95rem'
           }}
         >
-          {isLoading ? '⏳ Compiling...' : '🚀 Compile'}
+          {isLoading ? 'Compiling...' : 'Compile'}
         </button>
       </form>
 
       {error && (
         <div style={{ marginTop: '0.5rem', color: '#f85149', fontSize: '0.85rem', fontFamily: 'monospace' }}>
-          ❌ {error}
+          Error: {error}
         </div>
       )}
     </div>

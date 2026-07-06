@@ -7,9 +7,10 @@ interface ControlPanelProps {
     K: number;
     BLOCK_SIZE: number;
     hardware_profile: string;
-    // 👇 PHASE 2: Added the new microarchitecture toggles to the params object
     enable_divergence: boolean;
     coalesced_memory: boolean;
+    enable_async_copy: boolean;
+    enable_fusion: boolean;
   };
   setParams: (params: any) => void;
   onSetBaseline: () => void;
@@ -46,7 +47,7 @@ export function ControlPanel({
       border: '1px solid #333'
     }}>
       <h3 style={{ marginTop: 0, color: '#00ffcc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        ⚙️ Simulation Parameters
+        Simulation Parameters
       </h3>
       <p style={{ color: '#888', fontSize: '0.85rem', marginTop: 0 }}>
         Adjust the matrix dimensions and Triton block size. The physics engine will calculate the exact cycle count, heat, and memory pressure.
@@ -107,7 +108,6 @@ export function ControlPanel({
           </select>
         </div>
 
-        {/* 👇 PHASE 2: MICROARCHITECTURE TOGGLES 👇 */}
         <div style={{ gridColumn: 'span 4', display: 'flex', gap: '2rem', marginTop: '0.5rem', padding: '0.75rem', background: '#161b22', borderRadius: '6px', border: '1px solid #30363d' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
             <input 
@@ -116,7 +116,7 @@ export function ControlPanel({
               onChange={e => updateParam('enable_divergence', e.target.checked)} 
               style={{ width: '16px', height: '16px', accentColor: '#00ffcc' }}
             />
-            ⚠️ Simulate Warp Divergence
+            Simulate Warp Divergence
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
             <input 
@@ -125,10 +125,29 @@ export function ControlPanel({
               onChange={e => updateParam('coalesced_memory', e.target.checked)} 
               style={{ width: '16px', height: '16px', accentColor: '#00ffcc' }}
             />
-            🧠 Coalesced Memory Access
+            Coalesced Memory Access
           </label>
         </div>
-        
+        <div style={{ gridColumn: 'span 4', display: 'flex', gap: '2rem', marginTop: '0.5rem', padding: '0.75rem', background: '#161b22', borderRadius: '6px', border: '1px solid #30363d' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={params.enable_async_copy || false} 
+              onChange={e => updateParam('enable_async_copy', e.target.checked)} 
+              style={{ width: '16px', height: '16px', accentColor: '#3fb950' }}
+            />
+            Async Memory Copy (TMA)
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={params.enable_fusion || false} 
+              onChange={e => updateParam('enable_fusion', e.target.checked)} 
+              style={{ width: '16px', height: '16px', accentColor: '#bc8cff' }}
+            />
+            Kernel Fusion (FlashAttention)
+          </label>
+        </div>
         <button 
           type="submit" 
           disabled={isRunning}
@@ -145,10 +164,9 @@ export function ControlPanel({
             marginTop: '0.5rem'
           }}
         >
-          {isRunning ? '⏳ Simulating...' : '🚀 Compile & Run Simulation'}
+          {isRunning ? 'Simulating...' : 'Compile & Run Simulation'}
         </button>
 
-        {/* 👇 A/B COMPARISON BUTTONS 👇 */}
         <div style={{ gridColumn: 'span 4', display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
           <button 
             type="button"
@@ -162,7 +180,7 @@ export function ControlPanel({
               transition: 'all 0.2s ease'
             }}
           >
-            {hasBaseline ? '✅ Baseline (A) Set' : '📌 Save as Baseline (A)'}
+            {hasBaseline ? 'Baseline (A) Set' : 'Save as Baseline (A)'}
           </button>
           <button 
             type="button"
@@ -177,7 +195,7 @@ export function ControlPanel({
               transition: 'all 0.2s ease'
             }}
           >
-            {isRunning ? '⏳ Comparing...' : '⚔️ Compare B against A'}
+            {isRunning ? 'Comparing...' : 'Compare B against A'}
           </button>
         </div>
       </form>

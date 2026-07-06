@@ -15,10 +15,10 @@ export function ComparisonView() {
   };
 
   const formatStatus = (status: string) => {
-    if (status === 'SUCCESS') return <span style={{color: '#3fb950'}}>✅ Success</span>;
-    if (status === 'SUCCESS_WITH_THROTTLE') return <span style={{color: '#d29922'}}>⚠️ Throttled</span>;
-    if (status === 'OOM_ERROR') return <span style={{color: '#f85149'}}>❌ OOM Crash</span>;
-    return <span style={{color: '#f85149'}}>❌ Config Error</span>;
+    if (status === 'SUCCESS') return <span style={{color: '#3fb950'}}>Success</span>;
+    if (status === 'SUCCESS_WITH_THROTTLE') return <span style={{color: '#d29922'}}>Throttled</span>;
+    if (status === 'OOM_ERROR') return <span style={{color: '#f85149'}}>OOM Crash</span>;
+    return <span style={{color: '#f85149'}}>Config Error</span>;
   };
 
   return (
@@ -27,12 +27,12 @@ export function ComparisonView() {
       border: '1px solid #30363d', marginTop: '2rem', boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h2 style={{ margin: 0, color: '#c9d1d9' }}>⚔️ Kernel A/B Benchmark Report</h2>
+        <h2 style={{ margin: 0, color: '#c9d1d9' }}>Kernel A/B Benchmark Report</h2>
         <button onClick={clearComparisonResult} style={{
           background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d',
           padding: '0.5rem 1rem', borderRadius: '6px', cursor: 'pointer'
         }}>
-          ✕ Close Report
+          Close Report
         </button>
       </div>
 
@@ -43,7 +43,7 @@ export function ComparisonView() {
         padding: '1.5rem', borderRadius: '8px', textAlign: 'center', marginBottom: '2rem'
       }}>
         <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: deltas.winner === 'KERNEL B' ? '#3fb950' : deltas.winner === 'KERNEL A' ? '#58a6ff' : '#c9d1d9' }}>
-          🏆 Winner: {deltas.winner}
+          Winner: {deltas.winner}
         </div>
         <div style={{ color: '#8b949e', marginTop: '0.5rem' }}>{deltas.summary}</div>
       </div>

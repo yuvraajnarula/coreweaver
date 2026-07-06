@@ -26,10 +26,12 @@ export interface SramAccess {
   address: number;
 }
 export interface PipelineStage {
-  stage: 'FETCH' | 'DECODE' | 'EXECUTE' | 'MEMORY' | 'WRITEBACK';
+  stage: 'FETCH' | 'DECODE' | 'EXECUTE' | 'MEMORY' | 'WRITEBACK' | 'MEMORY (VRAM)' | 'EXECUTE (Tensor)' | 'NOP (Thermal Bubble)' | 'ASYNC MEM (Hidden)';
   cycles: number;
-  status: 'NORMAL' | 'STALL' | 'SLOW' | 'CONFLICT';
+  status: 'NORMAL' | 'STALL' | 'SLOW' | 'CONFLICT' | 'DIVERGENT' | 'OVERLAP';
 }
+
+
 export interface CycleData {
   cycle: number;
   instruction: string;

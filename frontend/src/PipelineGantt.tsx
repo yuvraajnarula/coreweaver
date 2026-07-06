@@ -9,7 +9,7 @@ export function PipelineGantt() {
   const trace = currentCycle.pipeline_trace;
   const metrics = currentCycle.pipeline_metrics;
   
-  // 🧠 HYBRID SCALING: Prevent tiny stages from disappearing
+  // HYBRID SCALING: Prevent tiny stages from disappearing
   // We calculate visual width based on cycles, but enforce a 5% minimum visual width.
   const totalCycles = metrics.total_latency;
   const visualWeights = trace.map(stage => Math.max(5, (stage.cycles / totalCycles) * 100));
@@ -38,7 +38,7 @@ export function PipelineGantt() {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <h3 style={{ margin: 0, color: '#00ffcc', fontSize: '1.1rem' }}>
-          ⏱️ Instruction Pipeline Lifecycle (Strict Latency)
+          Instruction Pipeline Lifecycle (Strict Latency)
         </h3>
         
         {/* Pipeline Efficiency Gauge */}
@@ -104,7 +104,7 @@ export function PipelineGantt() {
                   width: '16px', height: '16px', fontSize: '10px', 
                   display: 'flex', alignItems: 'center', justifyContent: 'center' 
                 }}>
-                  ⚠
+                  !
                 </div>
               )}
             </div>
