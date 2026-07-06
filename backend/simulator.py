@@ -4,10 +4,26 @@ import math
 # 1. HARDWARE PROFILES (The Silicon Truth)
 # ==========================================
 HARDWARE_PROFILES = {
-    "A100_80GB": {"vram_gb": 80.0, "name": "NVIDIA A100 80GB", "bandwidth": 2034, "sram_kb": 192, "peak_tflops": 312.0, "tdp_watts": 300.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 2048},
-    "RTX_4090": {"vram_gb": 24.0, "name": "NVIDIA RTX 4090 24GB", "bandwidth": 1008, "sram_kb": 100, "peak_tflops": 330.0, "tdp_watts": 450.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 1536},
-    "RTX_3090": {"vram_gb": 24.0, "name": "NVIDIA RTX 3090 24GB", "bandwidth": 936, "sram_kb": 100, "peak_tflops": 280.0, "tdp_watts": 350.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 1536},
-    "T4_16GB": {"vram_gb": 16.0, "name": "NVIDIA T4 16GB", "bandwidth": 320, "sram_kb": 96, "peak_tflops": 65.0, "tdp_watts": 70.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 1024}
+    "A100_80GB": {
+        "vram_gb": 80.0, "name": "NVIDIA A100 80GB", "bandwidth": 2034, "sram_kb": 192, 
+        "peak_tflops": 312.0, "tdp_watts": 300.0, "max_regs_per_sm": 65536, 
+        "max_threads_per_sm": 2048, "cost_per_hour": 3.50
+    },
+    "RTX_4090": {
+        "vram_gb": 24.0, "name": "NVIDIA RTX 4090 24GB", "bandwidth": 1008, "sram_kb": 100, 
+        "peak_tflops": 330.0, "tdp_watts": 450.0, "max_regs_per_sm": 65536, 
+        "max_threads_per_sm": 1536, "cost_per_hour": 1.50
+    },
+    "RTX_3090": {
+        "vram_gb": 24.0, "name": "NVIDIA RTX 3090 24GB", "bandwidth": 936, "sram_kb": 100, 
+        "peak_tflops": 280.0, "tdp_watts": 350.0, "max_regs_per_sm": 65536, 
+        "max_threads_per_sm": 1536, "cost_per_hour": 1.00
+    },
+    "T4_16GB": {
+        "vram_gb": 16.0, "name": "NVIDIA T4 16GB", "bandwidth": 320, "sram_kb": 96, 
+        "peak_tflops": 65.0, "tdp_watts": 70.0, "max_regs_per_sm": 65536, 
+        "max_threads_per_sm": 1024, "cost_per_hour": 0.50
+    }
 }
 
 BYTES_PER_CYCLE = 1500 
@@ -87,11 +103,9 @@ class GPUPhysicsEngine:
         bytes_a, bytes_b, bytes_c = (M * K) * 2, (K * N) * 2, (M * N) * 2
         total_bytes = bytes_a + bytes_b + bytes_c
         
-        # If fused, we skip writing/reading the intermediate NxN attention matrix to VRAM.
-        # This physically reduces the memory traffic by roughly 50%.
         is_fused = self.params.get('enable_fusion', False)
         if is_fused:
-            total_bytes = int(total_bytes * 0.5) # 50% less VRAM traffic
+            total_bytes = int(total_bytes * 0.5)
 
         total_flops = 2 * M * N * K
         total_requested_gb = total_bytes / (1024**3)
@@ -123,7 +137,6 @@ class GPUPhysicsEngine:
         load_cycles = max(2, int((true_mem_cycles / true_total_cycles) * total_visual_cycles))
         math_cycles = max(2, total_visual_cycles - load_cycles - 2)
 
-        # --- FIXED THERMAL MATH (Bounded Physics) ---
         total_gflops = total_flops / 1e9
         target_temp_rise_math = min(70.0, total_gflops * 5.0) 
         heat_per_math_cycle = target_temp_rise_math / math_cycles if math_cycles > 0 else 0
@@ -133,7 +146,6 @@ class GPUPhysicsEngine:
         heat_per_load = target_temp_rise_load / load_cycles if load_cycles > 0 else 0
         heat_per_store = 3.0 
 
-        # --- OCCUPANCY & REGISTER MATH ---
         regs_per_thread = 32 + (BLOCK_SIZE // 16) 
         max_regs = gpu_specs['max_regs_per_sm']
         max_threads = gpu_specs['max_threads_per_sm']
@@ -152,12 +164,10 @@ class GPUPhysicsEngine:
             "occupancy_pct": occupancy_pct
         }
 
-        # --- EXTRACT MICRO-ARCHITECTURE TOGGLES ---
         enable_div = self.params.get('enable_divergence', False)
         is_coalesced = self.params.get('coalesced_memory', True)
-        is_async = self.params.get('enable_async_copy', False) # PHASE 3 TOGGLE
+        is_async = self.params.get('enable_async_copy', False)
 
-        # --- GENERATE CYCLES ---
         for i in range(load_cycles):
             self.cycle_count += 1
             self.allocated_blocks = list(range(int((i+1)/load_cycles * blocks_needed)))
@@ -205,6 +215,20 @@ class GPUPhysicsEngine:
             "ridge_point": round(peak_compute_gflops / peak_mem_bw, 2)
         }
 
+        # FinOps Cloud Cost Estimator Math
+        base_clock_hz = 1500 * 1e6 
+        true_wall_clock_seconds = true_total_cycles / base_clock_hz
+        hourly_rate = gpu_specs.get('cost_per_hour', 3.50)
+        kernel_cost_usd = (true_wall_clock_seconds / 3600.0) * hourly_rate
+        
+        finops_metrics = {
+            "true_total_cycles": int(true_total_cycles),
+            "wall_clock_seconds": round(true_wall_clock_seconds, 6),
+            "hourly_rate_usd": hourly_rate,
+            "kernel_cost_usd": round(kernel_cost_usd, 8),
+            "cost_per_million_runs": round(kernel_cost_usd * 1_000_000, 2)
+        }
+
         return {
             "metadata": {
                 "status": status, "hardware_profile": hardware_key, 
@@ -213,6 +237,7 @@ class GPUPhysicsEngine:
             },
             "memory_breakdown": memory_breakdown,
             "roofline_metrics": roofline_metrics,
+            "finops_metrics": finops_metrics,
             "timeline": self.timeline
         }
 
@@ -249,13 +274,11 @@ class GPUPhysicsEngine:
             pipeline_trace[3]["cycles"] = 0
             pipeline_trace.insert(2, {"stage": "NOP (Thermal Bubble)", "cycles": 300, "status": "STALL"})
 
-        # PHASE 3: ASYNCHRONOUS MEMORY COPY (TMA)
         if enable_async_copy and instruction == "LOAD_HBM" and self.cycle_count > 1:
             pipeline_trace[3]["cycles"] = 0 
             pipeline_trace[3]["stage"] = "ASYNC MEM (Hidden)"
             pipeline_trace[3]["status"] = "OVERLAP"
 
-        # --- POWER DRAW (TDP) CALCULATION ---
         hw_profile = self.params.get('hardware_profile', 'A100_80GB')
         tdp = HARDWARE_PROFILES[hw_profile]['tdp_watts']
         idle_power = tdp * 0.20
@@ -270,7 +293,6 @@ class GPUPhysicsEngine:
             power_throttled = True
             current_power_watts = tdp
 
-        # --- MEMORY COALESCING PATTERN ---
         warp_pattern = []
         if instruction in ["LOAD_HBM", "STORE_HBM"]:
             if coalesced_memory:
@@ -280,7 +302,6 @@ class GPUPhysicsEngine:
                 
         transactions = 1 if coalesced_memory else 32
 
-        # --- WARP DIVERGENCE ---
         divergence_info = None
         if enable_divergence and instruction == "MMA_SYNC":
             divergence_info = {
@@ -327,16 +348,11 @@ class GPUPhysicsEngine:
             }
         }
 
-    # ======================================================================
-    # A/B COMPARISON ENGINE METHODS
-    # ======================================================================
     def run_single_simulation(self, params: dict):
-        """Runs a simulation and returns the result without keeping internal state."""
         self.reset_state()
         return self.generate_timeline(params)
 
     def compare_configs(self, config_a: dict, config_b: dict):
-        """Runs two simulations and calculates the performance deltas."""
         result_a = self.run_single_simulation(config_a)
         result_b = self.run_single_simulation(config_b)
         

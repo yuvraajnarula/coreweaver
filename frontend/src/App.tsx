@@ -11,10 +11,12 @@ import { CrashScreen } from "./CrashScreen";
 import { RooflineChart } from "./RooflineChart";
 import { PipelineGantt } from './PipelineGantt';
 import { AICommandBar } from './AICommandBar';
-import { ComparisonView } from './ComparisionView'; 
-import { WarpDivergenceView } from "./WarpDivergence";
-import { SiliconTelemetry } from "./SiliconTelemetry";
-import { ModernExecutionView } from "./ModernExecutionView";
+import { ComparisonView } from './ComparisionView';
+import { SiliconTelemetry } from './SiliconTelemetry';
+import { WarpDivergenceView } from './WarpDivergence';
+import { ModernExecutionView } from './ModernExecutionView';
+import { FinOpsDashboard } from './FinOpsDashboard';
+import { WorkflowToolbar } from './WorkflowToolbar';
 
 function App() {
   const { sendConfig } = useSimulationSocket();
@@ -28,18 +30,30 @@ function App() {
     play, 
     pause,
     metadata,
-    comparisonResult 
+    comparisonResult
   } = useSimulationStore();
   
   const [isRunning, setIsRunning] = useState(false);
   const [showMicroView, setShowMicroView] = useState(false);
-
-  const [simParams, setSimParams] = useState({
-    M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB',
-    enable_divergence: false, coalesced_memory: true , enable_fusion: false
-  });
-  
   const [baselineConfig, setBaselineConfig] = useState<any | null>(null);
+
+  // Parse URL for shareable links
+  const getInitialParams = () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    return {
+      M: Number(searchParams.get('m')) || 1024,
+      N: Number(searchParams.get('n')) || 1024,
+      K: Number(searchParams.get('k')) || 1024,
+      BLOCK_SIZE: Number(searchParams.get('block')) || 128,
+      hardware_profile: searchParams.get('hw') || 'A100_80GB',
+      enable_divergence: searchParams.get('div') === '1',
+      coalesced_memory: searchParams.get('coal') !== '0', 
+      enable_async_copy: searchParams.get('async') === '1',
+      enable_fusion: searchParams.get('fuse') === '1',
+    };
+  };
+
+  const [simParams, setSimParams] = useState(getInitialParams());
 
   const currentCycle = timeline[currentCycleIndex];
 
@@ -65,7 +79,6 @@ function App() {
     }, 100);
   };
 
-  // 👇 4. A/B COMPARISON HANDLERS
   const handleSetBaseline = () => {
     setBaselineConfig(simParams);
   };
@@ -89,7 +102,6 @@ function App() {
     }
   };
 
-  // 🛑 IDLE OR ERROR STATE
   if (!currentCycle) {
     return (
       <div className="app">
@@ -106,6 +118,7 @@ function App() {
         </header>
         
         <div style={{ maxWidth: '1000px', margin: '2rem auto', padding: '1rem' }}>
+           <WorkflowToolbar params={simParams} setParams={setSimParams} onRunSimulation={handleRunSimulation} />
            <AICommandBar onParamsExtracted={handleAICompile} />
 
            <ControlPanel 
@@ -131,7 +144,6 @@ function App() {
     );
   }
 
-  // 🟢 ACTIVE STATE
   return (
     <div className="app">
       <header className="topbar">
@@ -175,6 +187,7 @@ function App() {
         </aside>
 
         <section className="content">
+          <WorkflowToolbar params={simParams} setParams={setSimParams} onRunSimulation={handleRunSimulation} />
           <AICommandBar onParamsExtracted={handleAICompile} />
 
           <ControlPanel 
@@ -197,7 +210,7 @@ function App() {
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <button className="button primary" onClick={() => setShowMicroView(true)}>
-                  🔬 Zoom SRAM
+                  Zoom SRAM
                 </button>
                 <span className="badge outline">Active</span>
               </div>
@@ -222,7 +235,7 @@ function App() {
               <div className="stat-card">
                 <span className="stat-label">Temperature</span>
                 <span className={`badge ${currentCycle.hardware_state.current_temperature > 90 ? "destructive" : "secondary"}`}>
-                  {currentCycle.hardware_state.current_temperature}°C
+                  {currentCycle.hardware_state.current_temperature}C
                 </span>
               </div>
               <div className="stat-card">
@@ -245,13 +258,14 @@ function App() {
 
           <MemoryGrid />
           <CodeView />
+          
           <SiliconTelemetry />
           <WarpDivergenceView />
-          <RooflineChart />
           <ModernExecutionView />
-          <PipelineGantt />
-          
+          <FinOpsDashboard />
 
+          <RooflineChart />
+          <PipelineGantt />
           {comparisonResult && <ComparisonView />}
         </section>
       </main>
