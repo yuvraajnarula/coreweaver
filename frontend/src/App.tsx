@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSimulationStore } from "./store";
 import { useSimulationSocket } from "./hooks/useSimulationSocket";
 import "./App.css";
@@ -17,6 +17,15 @@ import { WarpDivergenceView } from './WarpDivergence';
 import { ModernExecutionView } from './ModernExecutionView';
 import { FinOpsDashboard } from './FinOpsDashboard';
 import { WorkflowToolbar } from './WorkflowToolbar';
+import { AIOptimizationAgent } from './AIOptimizationAgent';
+import { CUPTITable } from './CUPTITable';
+
+
+const DEFAULT_PARAMS = {
+  M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB',
+  enable_divergence: false, coalesced_memory: true,
+  enable_async_copy: false, enable_fusion: false
+};
 
 function App() {
   const { sendConfig } = useSimulationSocket();
@@ -36,26 +45,51 @@ function App() {
   const [isRunning, setIsRunning] = useState(false);
   const [showMicroView, setShowMicroView] = useState(false);
   const [baselineConfig, setBaselineConfig] = useState<any | null>(null);
-
-  // Parse URL for shareable links
-  const getInitialParams = () => {
-    const searchParams = new URLSearchParams(window.location.search);
-    return {
-      M: Number(searchParams.get('m')) || 1024,
-      N: Number(searchParams.get('n')) || 1024,
-      K: Number(searchParams.get('k')) || 1024,
-      BLOCK_SIZE: Number(searchParams.get('block')) || 128,
-      hardware_profile: searchParams.get('hw') || 'A100_80GB',
-      enable_divergence: searchParams.get('div') === '1',
-      coalesced_memory: searchParams.get('coal') !== '0', 
-      enable_async_copy: searchParams.get('async') === '1',
-      enable_fusion: searchParams.get('fuse') === '1',
-    };
-  };
-
-  const [simParams, setSimParams] = useState(getInitialParams());
+  const [simParams, setSimParams] = useState(DEFAULT_PARAMS);
+  const [isResolvingLink, setIsResolvingLink] = useState(false);
 
   const currentCycle = timeline[currentCycleIndex];
+
+  // ==========================================
+  // ENTERPRISE SHARING: URL RESOLUTION
+  // ==========================================
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const sid = searchParams.get('sid');
+    
+    if (sid) {
+      setIsResolvingLink(true);
+      
+      fetch(`http://localhost:8000/api/share/${sid}`)
+        .then(res => {
+          if (!res.ok) throw new Error("Link expired or invalid");
+          return res.json();
+        })
+        .then(data => {
+          // Apply the resolved parameters
+          setSimParams(data.params);
+          
+          // Clean the URL so refreshing doesn't re-trigger the API call
+          window.history.replaceState({}, '', window.location.pathname);
+          
+          // Auto-run the simulation after React updates the state
+          setTimeout(() => {
+            sendConfig(data.params);
+            setIsRunning(true);
+            setTimeout(() => setIsRunning(false), 80000);
+          }, 100);
+        })
+        .catch(err => {
+          console.error("Failed to resolve share link:", err);
+          alert("Failed to load shared simulation. The link may have expired (TTL reached).");
+          // Clean the invalid SID from the URL
+          window.history.replaceState({}, '', window.location.pathname);
+        })
+        .finally(() => {
+          setIsResolvingLink(false);
+        });
+    }
+  }, []); // Run only on mount
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentCycleIndex(Number(e.target.value));
@@ -101,6 +135,17 @@ function App() {
       setIsRunning(false);
     }
   };
+
+  if (isResolvingLink) {
+    return (
+      <div className="app" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <div style={{ textAlign: 'center', color: '#c9d1d9' }}>
+          <h2>Resolving Shared Simulation...</h2>
+          <p style={{ color: '#8b949e' }}>Fetching parameters from backend.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentCycle) {
     return (
@@ -266,6 +311,8 @@ function App() {
 
           <RooflineChart />
           <PipelineGantt />
+          <AIOptimizationAgent />
+          <CUPTITable />
           {comparisonResult && <ComparisonView />}
         </section>
       </main>

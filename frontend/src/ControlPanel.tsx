@@ -36,7 +36,7 @@ export function ControlPanel({
     e.preventDefault();
     onRunSimulation(params);
   };
-
+  
   return (
     <div style={{ 
       background: '#1e1e1e', 

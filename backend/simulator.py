@@ -228,7 +228,12 @@ class GPUPhysicsEngine:
             "kernel_cost_usd": round(kernel_cost_usd, 8),
             "cost_per_million_runs": round(kernel_cost_usd * 1_000_000, 2)
         }
-
+        cupti_counters = self.generate_cupti_counters({
+            "metadata": {"status": status, "occupancy_metrics": occupancy_metrics},
+            "roofline_metrics": roofline_metrics,
+            "memory_breakdown": memory_breakdown,
+            "finops_metrics": finops_metrics
+        })
         return {
             "metadata": {
                 "status": status, "hardware_profile": hardware_key, 
@@ -238,6 +243,7 @@ class GPUPhysicsEngine:
             "memory_breakdown": memory_breakdown,
             "roofline_metrics": roofline_metrics,
             "finops_metrics": finops_metrics,
+            "cupti_counters": cupti_counters,
             "timeline": self.timeline
         }
 
@@ -400,3 +406,23 @@ class GPUPhysicsEngine:
             deltas['summary'] = "Both kernels ran Out of Memory."
 
         return {"kernel_a": result_a, "kernel_b": result_b, "deltas": deltas}
+    def generate_cupti_counters(self, result: dict):
+        """Maps internal simulation metrics to realistic NVIDIA CUPTI hardware counter names."""
+        occ = result['metadata'].get('occupancy_metrics', {})
+        roof = result.get('roofline_metrics', {})
+        mem = result.get('memory_breakdown', {})
+        
+        # Calculate mock sector counts (assuming 128-byte sectors)
+        total_sectors = int((mem.get('total_requested_gb', 0) * 1e9) / 128)
+        
+        return {
+            "sm__warps_active.avg.pct_of_peak_sustained_active": round(occ.get('occupancy_pct', 0), 2),
+            "sm__registers_sum.per_cycle_active": occ.get('regs_per_thread', 0) * occ.get('active_warps', 0),
+            "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum": total_sectors,
+            "l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum": int(total_sectors * 0.2),
+            "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": int(roof.get('achieved_gflops', 0) * 1e6),
+            "sm__inst_executed_pipe_tensor.sum": int(roof.get('achieved_gflops', 0) * 1e5),
+            "dram__sectors_read.sum": total_sectors,
+            "dram__sectors_write.sum": int(total_sectors * 0.5),
+            "gpu__time_duration.sum": result.get('finops_metrics', {}).get('wall_clock_seconds', 0) * 1e6
+        }
