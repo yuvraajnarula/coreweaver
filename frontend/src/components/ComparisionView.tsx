@@ -1,4 +1,4 @@
-import { useSimulationStore } from './store';
+import { useSimulationStore } from '../store';
 
 export function ComparisonView() {
   const { comparisonResult, clearComparisonResult } = useSimulationStore();

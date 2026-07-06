@@ -1,4 +1,4 @@
-import { useSimulationStore } from './store';
+import { useSimulationStore } from '../store';
 
 const styles = `
   @keyframes conflict-flash {

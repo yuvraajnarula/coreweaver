@@ -1,4 +1,4 @@
-import { useSimulationStore } from './store';
+import { useSimulationStore } from '../store';
 
 export function TokenStream() {
   const { timeline, currentCycleIndex } = useSimulationStore();

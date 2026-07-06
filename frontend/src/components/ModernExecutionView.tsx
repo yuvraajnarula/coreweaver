@@ -1,4 +1,4 @@
-import { useSimulationStore } from './store';
+import { useSimulationStore } from '../store';
 
 export function ModernExecutionView() {
   const { timeline, currentCycleIndex, memoryBreakdown, rooflineMetrics } = useSimulationStore();

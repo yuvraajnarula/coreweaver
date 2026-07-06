@@ -1,4 +1,4 @@
-import { useSimulationStore } from './store';
+import { useSimulationStore } from '../store';
 
 export function WarpDivergenceView() {
   const { timeline, currentCycleIndex } = useSimulationStore();

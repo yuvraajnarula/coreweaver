@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useSimulationStore } from "./store";
+import { useSimulationStore } from "../store";
 import { CIRegressionView } from "./CICDRegressionView";
 
 interface WorkflowToolbarProps {
