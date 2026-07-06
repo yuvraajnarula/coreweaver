@@ -3,11 +3,12 @@ import math
 # ==========================================
 # 1. HARDWARE PROFILES (The Silicon Truth)
 # ==========================================
+# 👇 UPDATED: Added tdp_watts, max_regs_per_sm, max_threads_per_sm
 HARDWARE_PROFILES = {
-    "A100_80GB": {"vram_gb": 80.0, "name": "NVIDIA A100 80GB", "bandwidth": 2034, "sram_kb": 192, "peak_tflops": 312.0},
-    "RTX_4090": {"vram_gb": 24.0, "name": "NVIDIA RTX 4090 24GB", "bandwidth": 1008, "sram_kb": 100, "peak_tflops": 330.0},
-    "RTX_3090": {"vram_gb": 24.0, "name": "NVIDIA RTX 3090 24GB", "bandwidth": 936, "sram_kb": 100, "peak_tflops": 280.0},
-    "T4_16GB": {"vram_gb": 16.0, "name": "NVIDIA T4 16GB", "bandwidth": 320, "sram_kb": 96, "peak_tflops": 65.0}
+    "A100_80GB": {"vram_gb": 80.0, "name": "NVIDIA A100 80GB", "bandwidth": 2034, "sram_kb": 192, "peak_tflops": 312.0, "tdp_watts": 300.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 2048},
+    "RTX_4090": {"vram_gb": 24.0, "name": "NVIDIA RTX 4090 24GB", "bandwidth": 1008, "sram_kb": 100, "peak_tflops": 330.0, "tdp_watts": 450.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 1536},
+    "RTX_3090": {"vram_gb": 24.0, "name": "NVIDIA RTX 3090 24GB", "bandwidth": 936, "sram_kb": 100, "peak_tflops": 280.0, "tdp_watts": 350.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 1536},
+    "T4_16GB": {"vram_gb": 16.0, "name": "NVIDIA T4 16GB", "bandwidth": 320, "sram_kb": 96, "peak_tflops": 65.0, "tdp_watts": 70.0, "max_regs_per_sm": 65536, "max_threads_per_sm": 1024}
 }
 
 BYTES_PER_CYCLE = 1500 
@@ -66,6 +67,9 @@ class GPUPhysicsEngine:
             
         return True, ""
 
+    # ======================================================================
+    # 👇 FULLY UPDATED GENERATE_TIMELINE METHOD 👇
+    # ======================================================================
     def generate_timeline(self, params: dict):
         self.reset_state()
         self.params = params
@@ -126,22 +130,49 @@ class GPUPhysicsEngine:
         heat_per_load = target_temp_rise_load / load_cycles if load_cycles > 0 else 0
         heat_per_store = 3.0 
 
+        # 👇 PHASE 2: OCCUPANCY & REGISTER MATH
+        regs_per_thread = 32 + (BLOCK_SIZE // 16) 
+        max_regs = gpu_specs['max_regs_per_sm']
+        max_threads = gpu_specs['max_threads_per_sm']
+        
+        threads_per_block = BLOCK_SIZE
+        blocks_by_regs = max_regs // (regs_per_thread * threads_per_block)
+        blocks_by_threads = max_threads // threads_per_block
+        active_blocks = min(blocks_by_regs, blocks_by_threads)
+        active_threads = active_blocks * threads_per_block
+        occupancy_pct = round((active_threads / max_threads) * 100, 1)
+
+        occupancy_metrics = {
+            "regs_per_thread": regs_per_thread,
+            "active_warps": (active_threads // 32),
+            "max_warps": (max_threads // 32),
+            "occupancy_pct": occupancy_pct
+        }
+
+        # 👇 PHASE 2: EXTRACT MICRO-ARCHITECTURE TOGGLES
+        enable_div = self.params.get('enable_divergence', False)
+        is_coalesced = self.params.get('coalesced_memory', True)
+
+        # --- GENERATE CYCLES ---
         for i in range(load_cycles):
             self.cycle_count += 1
             self.allocated_blocks = list(range(int((i+1)/load_cycles * blocks_needed)))
             self.calculate_thermal_diffusion([10, 11, 20, 21], heat_per_load)
             sram = [{"thread_id": 0, "bank_id": 12, "address": 1}, {"thread_id": 1, "bank_id": 12, "address": 2}] if (has_conflict and i == 1) else [{"thread_id": 0, "bank_id": 4, "address": 0}, {"thread_id": 1, "bank_id": 5, "address": 0}]
-            self.timeline.append(self._build_cycle("LOAD_HBM", "Loading tiles from HBM to SRAM", 7, sram, has_conflict and i==1))
+            # 👇 PASS NEW TOGGLES TO _build_cycle
+            self.timeline.append(self._build_cycle("LOAD_HBM", "Loading tiles from HBM to SRAM", 7, sram, has_conflict and i==1, enable_div, is_coalesced))
 
         tensor_cores = [33, 34, 43, 44]
         for i in range(math_cycles):
             self.cycle_count += 1
             self.calculate_thermal_diffusion(tensor_cores, heat_per_math_cycle)
-            self.timeline.append(self._build_cycle("MMA_SYNC", "Tensor Cores executing MAC operations", 11, [], False))
+            # 👇 PASS NEW TOGGLES TO _build_cycle
+            self.timeline.append(self._build_cycle("MMA_SYNC", "Tensor Cores executing MAC operations", 11, [], False, enable_div, is_coalesced))
 
         self.cycle_count += 1
         self.calculate_thermal_diffusion([80, 81], heat_per_store)
-        self.timeline.append(self._build_cycle("STORE_HBM", "Writing result matrix to HBM", 14, [], False))
+        # 👇 PASS NEW TOGGLES TO _build_cycle
+        self.timeline.append(self._build_cycle("STORE_HBM", "Writing result matrix to HBM", 14, [], False, enable_div, is_coalesced))
 
         max_temp = max(self.thermal_map)
         status = "SUCCESS"
@@ -150,14 +181,14 @@ class GPUPhysicsEngine:
             self.cycle_count += 1
             self.clock_speed = 750
             self.calculate_thermal_diffusion([], 0.0)
-            self.timeline.append(self._build_cycle("STALL_THERMAL", "CRITICAL: Thermal limit reached. Clock throttled.", 11, [], False))
+            # 👇 PASS NEW TOGGLES TO _build_cycle
+            self.timeline.append(self._build_cycle("STALL_THERMAL", "CRITICAL: Thermal limit reached. Clock throttled.", 11, [], False, enable_div, is_coalesced))
             self.clock_speed = 1500
 
         arithmetic_intensity = total_flops / total_bytes if total_bytes > 0 else 0
         peak_compute_gflops = gpu_specs['peak_tflops'] * 1000 
         peak_mem_bw = gpu_specs['bandwidth'] 
         
-        # Roofline calculation incorporating efficiency penalties for the final achieved metric
         efficiency = 0.85
         if has_conflict: efficiency *= 0.5
         if status == "SUCCESS_WITH_THROTTLE": efficiency *= 0.6
@@ -175,13 +206,20 @@ class GPUPhysicsEngine:
         }
 
         return {
-            "metadata": {"status": status, "hardware_profile": hardware_key, "total_cycles": self.cycle_count},
+            "metadata": {
+                "status": status, "hardware_profile": hardware_key, 
+                "total_cycles": self.cycle_count,
+                "occupancy_metrics": occupancy_metrics # 👈 ADDED OCCUPANCY TO METADATA
+            },
             "memory_breakdown": memory_breakdown,
             "roofline_metrics": roofline_metrics,
             "timeline": self.timeline
         }
 
-    def _build_cycle(self, instruction, description, source_line, sram_access, bank_conflict):
+    # ======================================================================
+    # 👇 FULLY UPDATED _BUILD_CYCLE METHOD 👇
+    # ======================================================================
+    def _build_cycle(self, instruction, description, source_line, sram_access, bank_conflict, enable_divergence=False, coalesced_memory=True):
         conflict_details = "Bank conflict detected on SRAM_BANK_12" if bank_conflict else ""
         max_temp = max(self.thermal_map)
         token_idx = min(self.cycle_count - 1, len(MOCK_TOKENS) - 1)
@@ -214,8 +252,45 @@ class GPUPhysicsEngine:
             pipeline_trace[3]["cycles"] = 0
             pipeline_trace.insert(2, {"stage": "NOP (Thermal Bubble)", "cycles": 300, "status": "STALL"})
 
+        # 👇 PHASE 2: POWER DRAW (TDP) CALCULATION
+        hw_profile = self.params.get('hardware_profile', 'A100_80GB')
+        tdp = HARDWARE_PROFILES[hw_profile]['tdp_watts']
+        idle_power = tdp * 0.20
+        
+        math_power = (pipeline_trace[2]["cycles"] / 100.0) * (tdp * 0.60)
+        mem_power = (pipeline_trace[3]["cycles"] / 400.0) * (tdp * 0.30)
+        
+        current_power_watts = min(tdp * 1.1, idle_power + math_power + mem_power)
+        
+        power_throttled = False
+        if current_power_watts > tdp:
+            power_throttled = True
+            current_power_watts = tdp
+
+        # 👇 PHASE 2: MEMORY COALESCING PATTERN
+        warp_pattern = []
+        if instruction in ["LOAD_HBM", "STORE_HBM"]:
+            if coalesced_memory:
+                warp_pattern = [1000 + (i * 4) for i in range(32)]
+            else:
+                warp_pattern = [1000 + (i * 128) for i in range(32)]
+                
+        transactions = 1 if coalesced_memory else 32
+
+        # 👇 PHASE 2: WARP DIVERGENCE
+        divergence_info = None
+        if enable_divergence and instruction == "MMA_SYNC":
+            divergence_info = {
+                "has_divergence": True,
+                "path_a_cycles": 15,
+                "path_b_cycles": 10,
+                "serialized_penalty": 10 
+            }
+            pipeline_trace[2]["cycles"] += divergence_info["serialized_penalty"]
+            pipeline_trace[2]["status"] = "DIVERGENT"
+
         total_latency = sum(stage["cycles"] for stage in pipeline_trace)
-        bubble_cycles = sum(stage["cycles"] for stage in pipeline_trace if stage["status"] in ["STALL", "CONFLICT"])
+        bubble_cycles = sum(stage["cycles"] for stage in pipeline_trace if stage["status"] in ["STALL", "CONFLICT", "DIVERGENT"])
         efficiency_pct = round(((total_latency - bubble_cycles) / total_latency) * 100, 1) if total_latency > 0 else 100.0
 
         return {
@@ -230,6 +305,14 @@ class GPUPhysicsEngine:
                 "bubble_cycles": bubble_cycles,
                 "efficiency_pct": efficiency_pct
             },
+            "micro_state": { # 👈 ADDED MICRO-STATE
+                "power_watts": round(current_power_watts, 1),
+                "tdp_limit": tdp,
+                "power_throttled": power_throttled,
+                "warp_pattern": warp_pattern,
+                "memory_transactions": transactions,
+                "divergence_info": divergence_info
+            },
             "hardware_state": {
                 "current_temperature": round(max_temp, 1),
                 "clock_speed_mhz": self.clock_speed,
@@ -239,81 +322,4 @@ class GPUPhysicsEngine:
                 "thermal_map": [round(t, 1) for t in self.thermal_map],
                 "sram_access": sram_access
             }
-        }
-    def run_single_simulation(self, params: dict):
-        """Runs a simulation and returns the result without keeping internal state."""
-        self.reset_state()
-        return self.generate_timeline(params)
-
-    def compare_configs(self, config_a: dict, config_b: dict):
-        """Runs two simulations and calculates the performance deltas."""
-        
-        # 1. Run Kernel A (Baseline)
-        result_a = self.run_single_simulation(config_a)
-        
-        # 2. Run Kernel B (Challenger)
-        result_b = self.run_single_simulation(config_b)
-        
-        # 3. Calculate Deltas (The "Who Won?" Math)
-        # We only calculate deltas if both simulations succeeded
-        status_a = result_a['metadata']['status']
-        status_b = result_b['metadata']['status']
-        
-        deltas = {
-            "status_a": status_a,
-            "status_b": status_b,
-            "cycle_delta_pct": 0.0,
-            "gflops_delta": 0.0,
-            "vram_delta_gb": 0.0,
-            "temp_delta_c": 0.0,
-            "winner": "TIE",
-            "summary": "Both kernels executed."
-        }
-
-        if status_a in ['SUCCESS', 'SUCCESS_WITH_THROTTLE'] and status_b in ['SUCCESS', 'SUCCESS_WITH_THROTTLE']:
-            cycles_a = result_a['metadata']['total_cycles']
-            cycles_b = result_b['metadata']['total_cycles']
-            
-            gflops_a = result_a['roofline_metrics']['achieved_gflops']
-            gflops_b = result_b['roofline_metrics']['achieved_gflops']
-            
-            temp_a = max(result_a['timeline'][-1]['hardware_state']['current_temperature'], 45.0)
-            temp_b = max(result_b['timeline'][-1]['hardware_state']['current_temperature'], 45.0)
-
-            # Calculate percentages (Positive means B is better/faster)
-            if cycles_a > 0:
-                deltas['cycle_delta_pct'] = round(((cycles_a - cycles_b) / cycles_a) * 100, 1)
-            
-            deltas['gflops_delta'] = round(gflops_b - gflops_a, 1)
-            deltas['temp_delta_c'] = round(temp_b - temp_a, 1)
-            
-            if result_a.get('memory_breakdown') and result_b.get('memory_breakdown'):
-                deltas['vram_delta_gb'] = round(
-                    result_b['memory_breakdown']['total_requested_gb'] - 
-                    result_a['memory_breakdown']['total_requested_gb'], 2
-                )
-
-            # Determine the Winner based on GFLOPS
-            if gflops_b > gflops_a * 1.05:
-                deltas['winner'] = "KERNEL B"
-                deltas['summary'] = f"Kernel B is faster, achieving +{deltas['gflops_delta']} GFLOP/s."
-            elif gflops_a > gflops_b * 1.05:
-                deltas['winner'] = "KERNEL A"
-                deltas['summary'] = f"Kernel A is faster. Kernel B lost {-deltas['gflops_delta']} GFLOP/s."
-            else:
-                deltas['summary'] = "Performance is virtually identical."
-                
-        elif status_a == "OOM_ERROR" and status_b in ['SUCCESS', 'SUCCESS_WITH_THROTTLE']:
-            deltas['winner'] = "KERNEL B"
-            deltas['summary'] = "Kernel A ran Out of Memory. Kernel B succeeded!"
-        elif status_b == "OOM_ERROR" and status_a in ['SUCCESS', 'SUCCESS_WITH_THROTTLE']:
-            deltas['winner'] = "KERNEL A"
-            deltas['summary'] = "Kernel B ran Out of Memory. Kernel A succeeded!"
-        elif status_a == "OOM_ERROR" and status_b == "OOM_ERROR":
-            deltas['summary'] = "Both kernels ran Out of Memory."
-
-        return {
-            "kernel_a": result_a,
-            "kernel_b": result_b,
-            "deltas": deltas
         }

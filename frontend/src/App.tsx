@@ -12,6 +12,8 @@ import { RooflineChart } from "./RooflineChart";
 import { PipelineGantt } from './PipelineGantt';
 import { AICommandBar } from './AICommandBar';
 import { ComparisonView } from './ComparisionView'; 
+import { WarpDivergenceView } from "./WarpDivergence";
+import { SiliconTelemetry } from "./SiliconTelemetry";
 
 function App() {
   const { sendConfig } = useSimulationSocket();
@@ -32,7 +34,8 @@ function App() {
   const [showMicroView, setShowMicroView] = useState(false);
 
   const [simParams, setSimParams] = useState({
-    M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB'
+    M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB',
+    enable_divergence: false, coalesced_memory: true 
   });
   
   const [baselineConfig, setBaselineConfig] = useState<any | null>(null);
@@ -241,6 +244,8 @@ function App() {
 
           <MemoryGrid />
           <CodeView />
+          <SiliconTelemetry />
+          <WarpDivergenceView />
           <RooflineChart />
           <PipelineGantt />
 

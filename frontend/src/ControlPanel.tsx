@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-
 interface ControlPanelProps {
   onRunSimulation: (params: any) => void;
   isRunning: boolean;
@@ -9,6 +7,9 @@ interface ControlPanelProps {
     K: number;
     BLOCK_SIZE: number;
     hardware_profile: string;
+    // 👇 PHASE 2: Added the new microarchitecture toggles to the params object
+    enable_divergence: boolean;
+    coalesced_memory: boolean;
   };
   setParams: (params: any) => void;
   onSetBaseline: () => void;
@@ -104,6 +105,28 @@ export function ControlPanel({
             <option value="RTX_3090">NVIDIA RTX 3090 24GB (Consumer)</option>
             <option value="T4_16GB">NVIDIA T4 16GB (Edge/Server)</option>
           </select>
+        </div>
+
+        {/* 👇 PHASE 2: MICROARCHITECTURE TOGGLES 👇 */}
+        <div style={{ gridColumn: 'span 4', display: 'flex', gap: '2rem', marginTop: '0.5rem', padding: '0.75rem', background: '#161b22', borderRadius: '6px', border: '1px solid #30363d' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={params.enable_divergence || false} 
+              onChange={e => updateParam('enable_divergence', e.target.checked)} 
+              style={{ width: '16px', height: '16px', accentColor: '#00ffcc' }}
+            />
+            ⚠️ Simulate Warp Divergence
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={params.coalesced_memory !== false} 
+              onChange={e => updateParam('coalesced_memory', e.target.checked)} 
+              style={{ width: '16px', height: '16px', accentColor: '#00ffcc' }}
+            />
+            🧠 Coalesced Memory Access
+          </label>
         </div>
         
         <button 

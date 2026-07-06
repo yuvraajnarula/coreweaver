@@ -1,4 +1,24 @@
 import { create } from 'zustand';
+export interface OccupancyMetrics {
+  regs_per_thread: number;
+  active_warps: number;
+  max_warps: number;
+  occupancy_pct: number;
+}
+
+export interface MicroState {
+  power_watts: number;
+  tdp_limit: number;
+  power_throttled: boolean;
+  warp_pattern: number[];
+  memory_transactions: number;
+  divergence_info: {
+    has_divergence: boolean;
+    path_a_cycles: number;
+    path_b_cycles: number;
+    serialized_penalty: number;
+  } | null;
+}
 
 export interface SramAccess {
   thread_id: number;
@@ -26,6 +46,8 @@ export interface CycleData {
     thermal_map: number[];
     sram_access: SramAccess[];
   };
+    micro_state: MicroState;
+
 }
 
 export interface SimulationMetadata {
@@ -33,6 +55,8 @@ export interface SimulationMetadata {
   error_message?: string;
   hardware_profile: string;
   total_cycles: number;
+    occupancy_metrics?: OccupancyMetrics;
+
 }
 
 export interface MemoryBreakdown {
@@ -79,6 +103,9 @@ interface SimulationState {
   comparisonResult: any | null;
   setComparisonResult: (result: any) => void;
   clearComparisonResult: () => void;
+  occupancyMetrics: OccupancyMetrics | null;
+setOccupancyMetrics: (metrics: OccupancyMetrics) => void;
+
 
 }
 
@@ -117,4 +144,6 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   comparisonResult: null,
   setComparisonResult: (result) => set({ comparisonResult: result }),
   clearComparisonResult: () => set({ comparisonResult: null }),
+  occupancyMetrics: null,
+setOccupancyMetrics: (metrics) => set({ occupancyMetrics: metrics }),
 }));
