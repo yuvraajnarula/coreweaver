@@ -20,6 +20,9 @@ import { WorkflowToolbar } from './components/WorkflowToolbar';
 import { AIOptimizationAgent } from './components/AIOptimizationAgent';
 import { CUPTITable } from './components/CUPTITable';
 
+import { OnboardingTour } from './components/OnboardingTour';
+import { HowItWorksModal } from './components/HowItWorks';
+
 const DEFAULT_PARAMS = {
   M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB',
   enable_divergence: false, coalesced_memory: true,
@@ -41,11 +44,22 @@ function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [isResolvingLink, setIsResolvingLink] = useState(false);
   const [showMicroView, setShowMicroView] = useState(false);
-  
-  // Restored for ControlPanel
   const [baselineConfig, setBaselineConfig] = useState<any | null>(null);
+  
+  // 🚀 NEW STATE FOR TOUR & DOCS
+  const [showTour, setShowTour] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
 
   const currentCycle = timeline[currentCycleIndex];
+
+  // 🚀 CHECK LOCALSTORAGE FOR FIRST-TIME USER
+  useEffect(() => {
+    const hasOnboarded = localStorage.getItem('coreweaver_onboarded');
+    if (!hasOnboarded) {
+      // Delay slightly to ensure DOM is rendered so getBoundingClientRect works
+      setTimeout(() => setShowTour(true), 500);
+    }
+  }, []);
 
   // URL Resolution Logic
   useEffect(() => {
@@ -82,7 +96,6 @@ function App() {
     }, 100);
   };
 
-  // Restored for ControlPanel
   const handleSetBaseline = () => {
     setBaselineConfig(simParams);
   };
@@ -122,7 +135,13 @@ function App() {
   if (!currentCycle) {
     return (
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)' }}>
-        <TopBar isRunning={isRunning} metadata={metadata} onRun={() => handleRunSimulation(simParams)} onToggleConfig={() => setShowConfig(!showConfig)} />
+        <TopBar 
+          isRunning={isRunning} 
+          metadata={metadata} 
+          onRun={() => handleRunSimulation(simParams)} 
+          onToggleConfig={() => setShowConfig(!showConfig)}
+          onToggleDocs={() => setShowDocs(true)} // 🚀 Pass Docs handler
+        />
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', overflowY: 'auto' }}>
           <div style={{ width: '100%', maxWidth: 800, padding: 'var(--space-8)' }}>
             <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 'var(--space-2)' }}>CoreWeaver</h1>
@@ -131,16 +150,24 @@ function App() {
             {showConfig && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                 <WorkflowToolbar params={simParams} setParams={setSimParams} onRunSimulation={handleRunSimulation} />
-                <AICommandBar onParamsExtracted={handleAICompile} />
-                <ControlPanel 
-                  onRunSimulation={handleRunSimulation} 
-                  isRunning={isRunning} 
-                  params={simParams} 
-                  setParams={setSimParams}
-                  onSetBaseline={handleSetBaseline}
-                  onRunComparison={handleRunComparison}
-                  hasBaseline={!!baselineConfig}
-                />
+                
+                {/* 🚀 TOUR TARGET: AI COMPILER */}
+                <div id="tour-ai-compiler">
+                  <AICommandBar onParamsExtracted={handleAICompile} />
+                </div>
+
+                {/* 🚀 TOUR TARGET: CONTROL PANEL */}
+                <div id="tour-control-panel">
+                  <ControlPanel 
+                    onRunSimulation={handleRunSimulation} 
+                    isRunning={isRunning} 
+                    params={simParams} 
+                    setParams={setSimParams}
+                    onSetBaseline={handleSetBaseline}
+                    onRunComparison={handleRunComparison}
+                    hasBaseline={!!baselineConfig}
+                  />
+                </div>
               </div>
             )}
             
@@ -153,6 +180,10 @@ function App() {
             {(metadata?.status === 'OOM_ERROR' || metadata?.status === 'INVALID_CONFIG') && <CrashScreen />}
           </div>
         </div>
+
+        {/* 🚀 RENDER ONBOARDING TOUR */}
+        {showTour && <OnboardingTour onComplete={() => setShowTour(false)} />}
+        {showDocs && <HowItWorksModal onClose={() => setShowDocs(false)} />}
       </div>
     );
   }
@@ -174,6 +205,7 @@ function App() {
         onPlayPause={() => isPlaying ? pause() : play()}
         onStep={(dir) => setCurrentCycleIndex(Math.max(0, Math.min(totalCycles - 1, currentCycleIndex + dir)))}
         onZoomSram={() => setShowMicroView(true)}
+        onToggleDocs={() => setShowDocs(true)} // 🚀 Pass Docs handler
       />
 
       {/* 2, 3, 4. The Workspace Grid */}
@@ -304,12 +336,16 @@ function App() {
       {showMicroView && (
         <MicroSRAMView onClose={() => setShowMicroView(false)} />
       )}
+
+      {/* 🚀 RENDER DOCS MODAL */}
+      {showDocs && <HowItWorksModal onClose={() => setShowDocs(false)} />}
     </div>
   );
 }
 
 // Sub-components
-function TopBar({ isRunning, metadata, onRun, onToggleConfig, isProfiling, progress, currentCycle, totalCycles, isPlaying, onPlayPause, onStep, onZoomSram }: any) {
+// 🚀 UPDATED TOPBAR TO INCLUDE DOCS BUTTON & RUN BUTTON ID
+function TopBar({ isRunning, metadata, onRun, onToggleConfig, isProfiling, progress, currentCycle, totalCycles, isPlaying, onPlayPause, onStep, onZoomSram, onToggleDocs }: any) {
   return (
     <header style={{ 
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
@@ -346,14 +382,22 @@ function TopBar({ isRunning, metadata, onRun, onToggleConfig, isProfiling, progr
             SRAM Zoom
           </button>
         )}
+        
+        {/* 🚀 TOUR TARGET: DOCS BUTTON */}
+        <button id="tour-docs-button" className="btn" onClick={onToggleDocs} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 700 }}>?</span> Docs
+        </button>
+
         {metadata?.status === 'OOM_ERROR' && <span className="data" style={{ color: 'var(--accent-red)', fontSize: 11 }}>● CUDA OOM</span>}
         {metadata?.status === 'SUCCESS_WITH_THROTTLE' && <span className="data" style={{ color: 'var(--accent-amber)', fontSize: 11 }}>● THERMAL THROTTLE</span>}
         
         <button className="btn" onClick={onToggleConfig}>
           {isProfiling ? 'Edit Config' : 'Configure'}
         </button>
+        
+        {/* 🚀 TOUR TARGET: RUN BUTTON */}
         {!isProfiling && (
-          <button className="btn btn-primary" onClick={onRun} disabled={isRunning}>
+          <button id="tour-run-button" className="btn btn-primary" onClick={onRun} disabled={isRunning}>
             {isRunning ? 'Compiling...' : 'Compile & Run'}
           </button>
         )}
