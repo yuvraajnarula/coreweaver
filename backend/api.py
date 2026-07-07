@@ -1,13 +1,14 @@
 import os
 import json
 import uuid
-import time
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from groq import Groq
+from groq import AsyncGroq  # 🚀 Upgraded to AsyncGroq
 from dotenv import load_dotenv
 from simulator import GPUPhysicsEngine
+import redis.asyncio as redis  # 🚀 Async Redis client
 
 load_dotenv()
 
@@ -21,22 +22,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 api_key = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=api_key) if api_key else None
+client = AsyncGroq(api_key=api_key) if api_key else None
 
-# ==========================================
-# ENTERPRISE SHARING: TTL CACHE IMPLEMENTATION
-# ==========================================
-# In a production environment, this would be Redis or Memcached.
-# For this standalone backend, we use a dictionary with timestamp-based eviction.
-share_cache = {}
-SHARE_TTL_SECONDS = 3600  
-
-def clean_expired_shares():
-    current_time = time.time()
-    expired_keys = [k for k, v in share_cache.items() if v['expires_at'] < current_time]
-    for k in expired_keys:
-        del share_cache[k]
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+SHARE_TTL_SECONDS = 3600  # 1 Hour
 
 class PromptRequest(BaseModel):
     prompt: str
@@ -44,6 +36,16 @@ class PromptRequest(BaseModel):
 class ShareRequest(BaseModel):
     params: dict
 
+class CompareRequest(BaseModel):
+    config_a: dict
+    config_b: dict
+
+class OptimizeRequest(BaseModel):
+    simulation_summary: dict
+
+# ==========================================
+# 3. AI PROMPTS
+# ==========================================
 SYSTEM_PROMPT = """
 You are an expert AI Hardware Compiler for the CoreWeaver GPU Simulator. 
 The user will describe an AI workload in plain English. 
@@ -63,20 +65,28 @@ Example Output:
 {"M": 4096, "N": 4096, "K": 4096, "BLOCK_SIZE": 128, "hardware_profile": "RTX_4090"}
 """
 
+OPTIMIZATION_PROMPT = """
+You are a Principal GPU Engineer reviewing a kernel simulation report. 
+Based on the provided telemetry summary, identify the primary bottleneck and provide exactly 3 actionable, highly technical optimization suggestions. 
+Focus on Triton/CUDA concepts like BLOCK_SIZE, memory coalescing, warp divergence, or kernel fusion.
+Keep the response concise, professional, and formatted as a bulleted list. Do not use emojis.
+"""
+
+
 @app.post("/api/analyze")
 async def analyze_prompt(req: PromptRequest):
     if not client:
         raise HTTPException(status_code=500, detail="GROQ_API_KEY is missing from .env file")
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": req.prompt}
             ],
             temperature=0.1,
-            response_format={ "type": "json_object" }
+            response_format={"type": "json_object"}
         )
         
         content = response.choices[0].message.content
@@ -94,58 +104,42 @@ async def analyze_prompt(req: PromptRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/compare")
 async def compare_kernels(req: CompareRequest):
     try:
         engine = GPUPhysicsEngine()
-        result = engine.compare_configs(req.config_a, req.config_b)
+        result = await asyncio.to_thread(engine.compare_configs, req.config_a, req.config_b)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ==========================================
-# NEW: SHARING ENDPOINTS
-# ==========================================
 
 @app.post("/api/share")
 async def create_share_link(req: ShareRequest):
-    clean_expired_shares()
-    
-    # Generate a 12-character hex ID (48 bits of entropy)
     share_id = uuid.uuid4().hex[:12] 
     
-    share_cache[share_id] = {
-        "params": req.params,
-        "expires_at": time.time() + SHARE_TTL_SECONDS
-    }
+    await redis_client.setex(
+        f"share:{share_id}", 
+        SHARE_TTL_SECONDS, 
+        json.dumps(req.params)
+    )
     
     return {
         "share_id": share_id, 
-        "ttl_seconds": SHARE_TTL_SECONDS,
-        "expires_at": time.time() + SHARE_TTL_SECONDS
+        "ttl_seconds": SHARE_TTL_SECONDS
     }
+
 
 @app.get("/api/share/{share_id}")
 async def get_share_link(share_id: str):
-    clean_expired_shares()
+    val = await redis_client.get(f"share:{share_id}")
     
-    if share_id not in share_cache:
+    if not val:
         raise HTTPException(status_code=404, detail="Link expired or not found.")
         
-    return {"params": share_cache[share_id]["params"]}
+    return {"params": json.loads(val)}
 
-class CompareRequest(BaseModel):
-    config_a: dict
-    config_b: dict
-class OptimizeRequest(BaseModel):
-    simulation_summary: dict
-
-OPTIMIZATION_PROMPT = """
-You are a Principal GPU Engineer reviewing a kernel simulation report. 
-Based on the provided telemetry summary, identify the primary bottleneck and provide exactly 3 actionable, highly technical optimization suggestions. 
-Focus on Triton/CUDA concepts like BLOCK_SIZE, memory coalescing, warp divergence, or kernel fusion.
-Keep the response concise, professional, and formatted as a bulleted list. Do not use emojis.
-"""
 
 @app.post("/api/optimize")
 async def optimize_kernel(req: OptimizeRequest):
@@ -155,7 +149,8 @@ async def optimize_kernel(req: OptimizeRequest):
     try:
         summary_text = json.dumps(req.simulation_summary, indent=2)
         
-        response = client.chat.completions.create(
+        
+        response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": OPTIMIZATION_PROMPT},
@@ -168,7 +163,9 @@ async def optimize_kernel(req: OptimizeRequest):
         return {"status": "success", "suggestions": suggestions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     print("CoreWeaver AI Agent starting on http://localhost:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, workers=4)

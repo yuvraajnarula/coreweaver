@@ -16,7 +16,7 @@ async def simulation_handler(websocket):
                 params = data['params']
                 print(f"Received Config: {params}")
                 
-                result = engine.generate_timeline(params)
+                result = await asyncio.to_thread(engine.generate_timeline, params)
                 
                 await websocket.send(json.dumps({"type": "METADATA", "data": result['metadata']}))
                 
@@ -27,13 +27,19 @@ async def simulation_handler(websocket):
                     if 'roofline_metrics' in result:
                         await websocket.send(json.dumps({"type": "ROOFLINE", "data": result['roofline_metrics']}))
                     
-                    # Stream FinOps metrics
                     if 'finops_metrics' in result:
                         await websocket.send(json.dumps({"type": "FINOPS", "data": result['finops_metrics']}))
                         
+                    
+                    total_cycles = len(result['timeline'])
+                    target_duration_sec = 8.0 
+                    delay = target_duration_sec / total_cycles if total_cycles > 0 else 0.1
+                    delay = max(0.02, min(delay, 0.5)) 
+                    
                     for cycle_data in result['timeline']:
                         await websocket.send(json.dumps({"type": "CYCLE", "data": cycle_data}))
-                        await asyncio.sleep(0.8) 
+                        await asyncio.sleep(delay)
+                        
                     print("Simulation complete.\n")
                 else:
                     print(f"Simulation halted: {result['metadata']['status']}\n")
@@ -43,7 +49,7 @@ async def simulation_handler(websocket):
 
 async def main():
     print("CoreWeaver Physics Engine starting on ws://localhost:8765")
-    async with websockets.serve(simulation_handler, "localhost", 8765):
+    async with websockets.serve(simulation_handler, "localhost", 8765, max_size=10*1024*1024):
         await asyncio.Future()
 
 if __name__ == "__main__":
