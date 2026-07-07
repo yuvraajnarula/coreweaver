@@ -1,3 +1,4 @@
+// AICommandBar.tsx
 import { useState } from 'react';
 
 interface AICommandBarProps {
@@ -43,47 +44,99 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
 
   return (
     <div style={{ 
-      background: '#161b22', borderRadius: '8px', padding: '1rem', 
-      border: '1px solid #30363d', marginBottom: '1rem' 
+      background: 'var(--bg-panel)', 
+      border: '1px solid var(--border-subtle)', 
+      borderRadius: 8, 
+      overflow: 'hidden',
+      transition: 'border-color 0.2s'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-        <span style={{ fontSize: '1.2rem' }}>AI</span>
-        <h3 style={{ margin: 0, color: '#c9d1d9', fontSize: '1rem' }}>AI Hardware Compiler</h3>
-        <span style={{ fontSize: '0.75rem', color: '#8b949e', background: '#21262d', padding: '2px 6px', borderRadius: '4px' }}>
-          Describe your workload in plain English
+      {/* Header */}
+      <div style={{ 
+        padding: '12px 16px', 
+        borderBottom: '1px solid var(--border-subtle)', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        background: 'var(--bg-elevated)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-blue)' }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Natural Language Compiler</span>
+        </div>
+        <span className="label" style={{ fontSize: 10 }}>
+          Describe workload in plain English
         </span>
       </div>
-      
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0.5rem' }}>
-        <input
-          type="text"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder='e.g., "Run Llama-3 8B attention head on an RTX 4090, sequence length 8k"'
-          disabled={isLoading}
-          style={{
-            flex: 1, padding: '0.75rem', background: '#0d1117', border: '1px solid #30363d',
-            borderRadius: '6px', color: '#c9d1d9', fontSize: '0.95rem', outline: 'none'
-          }}
-        />
-        <button
-          type="submit"
-          disabled={isLoading}
-          style={{
-            padding: '0 1.5rem', background: isLoading ? '#21262d' : '#238636',
-            color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold',
-            cursor: isLoading ? 'not-allowed' : 'pointer', fontSize: '0.95rem'
-          }}
-        >
-          {isLoading ? 'Compiling...' : 'Compile'}
-        </button>
-      </form>
 
-      {error && (
-        <div style={{ marginTop: '0.5rem', color: '#f85149', fontSize: '0.85rem', fontFamily: 'monospace' }}>
-          Error: {error}
+      {/* Input Area */}
+      <form onSubmit={handleSubmit} style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder='e.g., "Run Llama-3 8B attention head on an RTX 4090, sequence length 8k"'
+            disabled={isLoading}
+            className="data"
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              paddingRight: '100px', // Space for the absolute button
+              background: 'var(--bg-base)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 6,
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              outline: 'none',
+              transition: 'border-color 0.15s',
+              fontFamily: 'var(--font-mono)'
+            }}
+            onFocus={(e) => e.target.style.borderColor = 'var(--accent-blue)'}
+            onBlur={(e) => e.target.style.borderColor = 'var(--border-default)'}
+          />
+          <button
+            type="submit"
+            disabled={isLoading || !prompt.trim()}
+            style={{
+              position: 'absolute',
+              right: 6,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              padding: '6px 12px',
+              background: isLoading || !prompt.trim() ? 'var(--bg-elevated)' : 'var(--text-primary)',
+              color: isLoading || !prompt.trim() ? 'var(--text-tertiary)' : 'var(--bg-base)',
+              border: 'none',
+              borderRadius: 4,
+              fontWeight: 600,
+              cursor: isLoading || !prompt.trim() ? 'not-allowed' : 'pointer',
+              fontSize: 11,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              transition: 'all 0.15s'
+            }}
+          >
+            {isLoading ? 'Parsing...' : 'Compile'}
+          </button>
         </div>
-      )}
+
+        {error && (
+          <div style={{ 
+            padding: '8px 12px', 
+            background: 'rgba(239, 68, 68, 0.05)', 
+            border: '1px solid rgba(239, 68, 68, 0.2)', 
+            borderRadius: 4, 
+            color: 'var(--accent-red)', 
+            fontSize: 11, 
+            fontFamily: 'var(--font-mono)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}>
+            <span style={{ fontWeight: 600 }}>⚠</span>
+            <span>{error}</span>
+          </div>
+        )}
+      </form>
     </div>
   );
 }

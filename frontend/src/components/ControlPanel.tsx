@@ -1,214 +1,180 @@
+import { useSimulationStore } from '../store';
+
 interface ControlPanelProps {
+  params: any;
+  setParams: (params: any) => void;
   onRunSimulation: (params: any) => void;
   isRunning: boolean;
-  params: {
-    M: number;
-    N: number;
-    K: number;
-    BLOCK_SIZE: number;
-    hardware_profile: string;
-    enable_divergence: boolean;
-    coalesced_memory: boolean;
-    enable_async_copy: boolean;
-    enable_fusion: boolean;
-  };
-  setParams: (params: any) => void;
   onSetBaseline: () => void;
   onRunComparison: () => void;
   hasBaseline: boolean;
 }
 
-export function ControlPanel({ 
-  onRunSimulation, 
-  isRunning, 
-  params, 
-  setParams,
-  onSetBaseline,
-  onRunComparison,
-  hasBaseline
-}: ControlPanelProps) {
-  
+export function ControlPanel({ params, setParams, onRunSimulation, isRunning, onSetBaseline, onRunComparison, hasBaseline }: ControlPanelProps) {
+  const { metadata } = useSimulationStore();
+  console.log(metadata)
   const updateParam = (key: string, value: any) => {
     setParams({ ...params, [key]: value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onRunSimulation(params);
-  };
-  
   return (
-    <div style={{ 
-      background: '#1e1e1e', 
-      padding: '1.5rem', 
-      borderRadius: '8px', 
-      color: '#fff',
-      marginBottom: '1rem',
-      border: '1px solid #333'
-    }}>
-      <h3 style={{ marginTop: 0, color: '#00ffcc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        Simulation Parameters
-      </h3>
-      <p style={{ color: '#888', fontSize: '0.85rem', marginTop: 0 }}>
-        Adjust the matrix dimensions and Triton block size. The physics engine will calculate the exact cycle count, heat, and memory pressure.
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 800 }}>
+      
+      {/* Group 1: Matrix Dimensions */}
+      <FieldGroup title="Matrix Dimensions" subtitle="Define the GEMM workload (M x N x K)">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <NumberInput label="M (Rows)" value={params.M} onChange={(v) => updateParam('M', v)} />
+          <NumberInput label="N (Cols)" value={params.N} onChange={(v) => updateParam('N', v)} />
+          <NumberInput label="K (Depth)" value={params.K} onChange={(v) => updateParam('K', v)} />
+        </div>
+      </FieldGroup>
 
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', alignItems: 'end' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem', color: '#aaa', marginBottom: '4px' }}>Matrix M</label>
-          <input 
-            type="number" 
-            value={params.M} 
-            onChange={e => updateParam('M', Number(e.target.value))} 
-            style={inputStyle} 
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem', color: '#aaa', marginBottom: '4px' }}>Matrix N</label>
-          <input 
-            type="number" 
-            value={params.N} 
-            onChange={e => updateParam('N', Number(e.target.value))} 
-            style={inputStyle} 
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem', color: '#aaa', marginBottom: '4px' }}>Matrix K</label>
-          <input 
-            type="number" 
-            value={params.K} 
-            onChange={e => updateParam('K', Number(e.target.value))} 
-            style={inputStyle} 
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem', color: '#aaa', marginBottom: '4px' }}>BLOCK_SIZE</label>
-          <select 
-            value={params.BLOCK_SIZE} 
-            onChange={e => updateParam('BLOCK_SIZE', Number(e.target.value))} 
-            style={inputStyle}
-          >
-            <option value={64}>64</option>
-            <option value={128}>128</option>
-            <option value={256}>256</option>
-          </select>
-        </div>
-        
-        <div style={{ gridColumn: 'span 4' }}>
-          <label style={{ display: 'block', fontSize: '0.8rem', color: '#aaa', marginBottom: '4px' }}>Target Hardware</label>
-          <select 
+      {/* Group 2: Threadblock & Hardware */}
+      <FieldGroup title="Threadblock & Hardware Target" subtitle="Execution configuration and silicon profile">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
+          <NumberInput label="BLOCK_SIZE" value={params.BLOCK_SIZE} onChange={(v) => updateParam('BLOCK_SIZE', v)} />
+          <SelectInput 
+            label="Hardware Profile" 
             value={params.hardware_profile} 
-            onChange={e => updateParam('hardware_profile', e.target.value)} 
-            style={inputStyle}
-          >
-            <option value="A100_80GB">NVIDIA A100 80GB (Data Center)</option>
-            <option value="RTX_4090">NVIDIA RTX 4090 24GB (Consumer)</option>
-            <option value="RTX_3090">NVIDIA RTX 3090 24GB (Consumer)</option>
-            <option value="T4_16GB">NVIDIA T4 16GB (Edge/Server)</option>
-          </select>
+            onChange={(v) => updateParam('hardware_profile', v)}
+            options={['A100_80GB', 'H100_80GB', 'RTX_4090', 'MI300X']}
+          />
         </div>
+      </FieldGroup>
 
-        <div style={{ gridColumn: 'span 4', display: 'flex', gap: '2rem', marginTop: '0.5rem', padding: '0.75rem', background: '#161b22', borderRadius: '6px', border: '1px solid #30363d' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
-            <input 
-              type="checkbox" 
-              checked={params.enable_divergence || false} 
-              onChange={e => updateParam('enable_divergence', e.target.checked)} 
-              style={{ width: '16px', height: '16px', accentColor: '#00ffcc' }}
-            />
-            Simulate Warp Divergence
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
-            <input 
-              type="checkbox" 
-              checked={params.coalesced_memory !== false} 
-              onChange={e => updateParam('coalesced_memory', e.target.checked)} 
-              style={{ width: '16px', height: '16px', accentColor: '#00ffcc' }}
-            />
-            Coalesced Memory Access
-          </label>
+      {/* Group 3: Advanced Optimizations */}
+      <FieldGroup title="Advanced Optimizations" subtitle="Toggle micro-architectural features">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+          <Toggle label="Coalesced Memory Access" description="Align global memory loads to 128-byte boundaries" checked={params.coalesced_memory} onChange={(v) => updateParam('coalesced_memory', v)} />
+          <Toggle label="Async Copy (cp.async)" description="Hide memory latency using shared memory pipelines" checked={params.enable_async_copy} onChange={(v) => updateParam('enable_async_copy', v)} />
+          <Toggle label="Kernel Fusion" description="Fuse multiple operations to reduce VRAM traffic" checked={params.enable_fusion} onChange={(v) => updateParam('enable_fusion', v)} />
+          <Toggle label="Simulate Divergence" description="Inject control-flow divergence for analysis" checked={params.enable_divergence} onChange={(v) => updateParam('enable_divergence', v)} />
         </div>
-        <div style={{ gridColumn: 'span 4', display: 'flex', gap: '2rem', marginTop: '0.5rem', padding: '0.75rem', background: '#161b22', borderRadius: '6px', border: '1px solid #30363d' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
-            <input 
-              type="checkbox" 
-              checked={params.enable_async_copy || false} 
-              onChange={e => updateParam('enable_async_copy', e.target.checked)} 
-              style={{ width: '16px', height: '16px', accentColor: '#3fb950' }}
-            />
-            Async Memory Copy (TMA)
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#c9d1d9', fontSize: '0.85rem', cursor: 'pointer' }}>
-            <input 
-              type="checkbox" 
-              checked={params.enable_fusion || false} 
-              onChange={e => updateParam('enable_fusion', e.target.checked)} 
-              style={{ width: '16px', height: '16px', accentColor: '#bc8cff' }}
-            />
-            Kernel Fusion (FlashAttention)
-          </label>
+      </FieldGroup>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn" onClick={onSetBaseline}>
+            {hasBaseline ? 'Update Baseline' : 'Set Baseline'}
+          </button>
+          <button className="btn" onClick={onRunComparison} disabled={!hasBaseline} style={{ opacity: hasBaseline ? 1 : 0.5 }}>
+            Run A/B Comparison
+          </button>
         </div>
         <button 
-          type="submit" 
+          className="btn btn-primary" 
+          onClick={() => onRunSimulation(params)} 
           disabled={isRunning}
-          style={{
-            gridColumn: 'span 4',
-            padding: '0.75rem',
-            background: isRunning ? '#555' : '#00ffcc',
-            color: isRunning ? '#aaa' : '#000',
-            border: 'none',
-            borderRadius: '4px',
-            fontWeight: 'bold',
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            fontSize: '1rem',
-            marginTop: '0.5rem'
-          }}
+          style={{ padding: '10px 24px', fontSize: 13, fontWeight: 600 }}
         >
-          {isRunning ? 'Simulating...' : 'Compile & Run Simulation'}
+          {isRunning ? 'Compiling & Profiling...' : 'Compile & Run Kernel'}
         </button>
-
-        <div style={{ gridColumn: 'span 4', display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-          <button 
-            type="button"
-            onClick={onSetBaseline}
-            style={{
-              flex: 1, padding: '0.75rem', 
-              background: hasBaseline ? '#0d1117' : '#21262d', 
-              color: hasBaseline ? '#3fb950' : '#58a6ff',
-              border: `1px solid ${hasBaseline ? '#3fb950' : '#58a6ff'}`, 
-              borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            {hasBaseline ? 'Baseline (A) Set' : 'Save as Baseline (A)'}
-          </button>
-          <button 
-            type="button"
-            onClick={onRunComparison}
-            disabled={!hasBaseline || isRunning}
-            style={{
-              flex: 1, padding: '0.75rem', 
-              background: !hasBaseline || isRunning ? '#21262d' : '#8957e5', 
-              color: !hasBaseline || isRunning ? '#484f58' : '#fff',
-              border: 'none', borderRadius: '4px', fontWeight: 'bold', 
-              cursor: !hasBaseline || isRunning ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            {isRunning ? 'Comparing...' : 'Compare B against A'}
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.5rem',
-  background: '#2d2d2d',
-  border: '1px solid #444',
-  borderRadius: '4px',
-  color: '#fff',
-  fontSize: '1rem'
-};
+// --- Sub-components for strict design system ---
+
+function FieldGroup({ title, subtitle, children }: { title: string, subtitle: string, children: React.ReactNode }) {
+  return (
+    <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
+        <div className="label" style={{ marginTop: 2 }}>{subtitle}</div>
+      </div>
+      <div style={{ padding: 16 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function NumberInput({ label, value, onChange }: { label: string, value: number, onChange: (v: number) => void }) {
+  return (
+    <div>
+      <label className="label" style={{ display: 'block', marginBottom: 6 }}>{label}</label>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="data"
+        style={{
+          width: '100%',
+          padding: '8px 12px',
+          background: 'var(--bg-base)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 6,
+          color: 'var(--text-primary)',
+          fontSize: 13,
+          outline: 'none',
+          transition: 'border-color 0.15s'
+        }}
+        onFocus={(e) => e.target.style.borderColor = 'var(--accent-blue)'}
+        onBlur={(e) => e.target.style.borderColor = 'var(--border-default)'}
+      />
+    </div>
+  );
+}
+
+function SelectInput({ label, value, onChange, options }: { label: string, value: string, onChange: (v: string) => void, options: string[] }) {
+  return (
+    <div>
+      <label className="label" style={{ display: 'block', marginBottom: 6 }}>{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="data"
+        style={{
+          width: '100%',
+          padding: '8px 12px',
+          background: 'var(--bg-base)',
+          border: '1px solid var(--border-default)',
+          borderRadius: 6,
+          color: 'var(--text-primary)',
+          fontSize: 13,
+          outline: 'none',
+          cursor: 'pointer',
+          appearance: 'none',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a1a1aa' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 12px center'
+        }}
+      >
+        {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function Toggle({ label, description, checked, onChange }: { label: string, description: string, checked: boolean, onChange: (v: boolean) => void }) {
+  return (
+    <div 
+      onClick={() => onChange(!checked)}
+      style={{ 
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+        padding: 12, background: 'var(--bg-base)', borderRadius: 6, 
+        border: `1px solid ${checked ? 'var(--accent-blue)' : 'var(--border-subtle)'}`,
+        cursor: 'pointer', transition: 'all 0.15s'
+      }}
+    >
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{label}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{description}</div>
+      </div>
+      <div style={{ 
+        width: 32, height: 18, borderRadius: 9, 
+        background: checked ? 'var(--accent-blue)' : 'var(--bg-elevated)',
+        border: '1px solid var(--border-default)',
+        position: 'relative', transition: 'background 0.15s', flexShrink: 0, marginLeft: 12
+      }}>
+        <div style={{ 
+          width: 12, height: 12, borderRadius: '50%', background: '#fff', 
+          position: 'absolute', top: 2, left: checked ? 16 : 2, 
+          transition: 'left 0.15s', boxShadow: '0 1px 2px rgba(0,0,0,0.3)'
+        }} />
+      </div>
+    </div>
+  );
+}
