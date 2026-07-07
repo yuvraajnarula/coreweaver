@@ -22,6 +22,7 @@ import { CUPTITable } from './components/CUPTITable';
 
 import { OnboardingTour } from './components/OnboardingTour';
 import { HowItWorksModal } from './components/HowItWorks';
+import { ArchitectureBuilder } from './components/ArchitectureBuilder';
 
 const DEFAULT_PARAMS = {
   M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB',
@@ -46,17 +47,15 @@ function App() {
   const [showMicroView, setShowMicroView] = useState(false);
   const [baselineConfig, setBaselineConfig] = useState<any | null>(null);
   
-  // 🚀 NEW STATE FOR TOUR & DOCS
   const [showTour, setShowTour] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
-
+  const [showArchBuilder, setShowArchBuilder] = useState(false);
+  
   const currentCycle = timeline[currentCycleIndex];
 
-  // 🚀 CHECK LOCALSTORAGE FOR FIRST-TIME USER
   useEffect(() => {
     const hasOnboarded = localStorage.getItem('coreweaver_onboarded');
     if (!hasOnboarded) {
-      // Delay slightly to ensure DOM is rendered so getBoundingClientRect works
       setTimeout(() => setShowTour(true), 500);
     }
   }, []);
@@ -140,7 +139,8 @@ function App() {
           metadata={metadata} 
           onRun={() => handleRunSimulation(simParams)} 
           onToggleConfig={() => setShowConfig(!showConfig)}
-          onToggleDocs={() => setShowDocs(true)} // 🚀 Pass Docs handler
+          onToggleDocs={() => setShowDocs(true)}
+          onToggleArchBuilder={() => setShowArchBuilder(true)} // 🚀 Pass handler
         />
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', overflowY: 'auto' }}>
           <div style={{ width: '100%', maxWidth: 800, padding: 'var(--space-8)' }}>
@@ -151,12 +151,10 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
                 <WorkflowToolbar params={simParams} setParams={setSimParams} onRunSimulation={handleRunSimulation} />
                 
-                {/* 🚀 TOUR TARGET: AI COMPILER */}
                 <div id="tour-ai-compiler">
                   <AICommandBar onParamsExtracted={handleAICompile} />
                 </div>
 
-                {/* 🚀 TOUR TARGET: CONTROL PANEL */}
                 <div id="tour-control-panel">
                   <ControlPanel 
                     onRunSimulation={handleRunSimulation} 
@@ -181,9 +179,9 @@ function App() {
           </div>
         </div>
 
-        {/* 🚀 RENDER ONBOARDING TOUR */}
         {showTour && <OnboardingTour onComplete={() => setShowTour(false)} />}
         {showDocs && <HowItWorksModal onClose={() => setShowDocs(false)} />}
+        {showArchBuilder && <ArchitectureBuilder onClose={() => setShowArchBuilder(false)} onSave={(arch) => { console.log("Tape-out custom architecture:", arch); setShowArchBuilder(false); }} />}
       </div>
     );
   }
@@ -205,7 +203,8 @@ function App() {
         onPlayPause={() => isPlaying ? pause() : play()}
         onStep={(dir) => setCurrentCycleIndex(Math.max(0, Math.min(totalCycles - 1, currentCycleIndex + dir)))}
         onZoomSram={() => setShowMicroView(true)}
-        onToggleDocs={() => setShowDocs(true)} // 🚀 Pass Docs handler
+        onToggleDocs={() => setShowDocs(true)}
+        onToggleArchBuilder={() => setShowArchBuilder(true)} // 🚀 Pass handler
       />
 
       {/* 2, 3, 4. The Workspace Grid */}
@@ -337,15 +336,15 @@ function App() {
         <MicroSRAMView onClose={() => setShowMicroView(false)} />
       )}
 
-      {/* 🚀 RENDER DOCS MODAL */}
       {showDocs && <HowItWorksModal onClose={() => setShowDocs(false)} />}
+
+      {showArchBuilder && <ArchitectureBuilder onClose={() => setShowArchBuilder(false)} onSave={(arch) => { console.log("Tape-out custom architecture:", arch); setShowArchBuilder(false); }} />}
     </div>
   );
 }
 
 // Sub-components
-// 🚀 UPDATED TOPBAR TO INCLUDE DOCS BUTTON & RUN BUTTON ID
-function TopBar({ isRunning, metadata, onRun, onToggleConfig, isProfiling, progress, currentCycle, totalCycles, isPlaying, onPlayPause, onStep, onZoomSram, onToggleDocs }: any) {
+function TopBar({ isRunning, metadata, onRun, onToggleConfig, isProfiling, progress, currentCycle, totalCycles, isPlaying, onPlayPause, onStep, onZoomSram, onToggleDocs, onToggleArchBuilder }: any) {
   return (
     <header style={{ 
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
@@ -383,7 +382,10 @@ function TopBar({ isRunning, metadata, onRun, onToggleConfig, isProfiling, progr
           </button>
         )}
         
-        {/* 🚀 TOUR TARGET: DOCS BUTTON */}
+        <button className="btn" onClick={onToggleArchBuilder} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12 }}>⬡</span> Design Silicon
+        </button>
+
         <button id="tour-docs-button" className="btn" onClick={onToggleDocs} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 12, fontWeight: 700 }}>?</span> Docs
         </button>
@@ -395,7 +397,6 @@ function TopBar({ isRunning, metadata, onRun, onToggleConfig, isProfiling, progr
           {isProfiling ? 'Edit Config' : 'Configure'}
         </button>
         
-        {/* 🚀 TOUR TARGET: RUN BUTTON */}
         {!isProfiling && (
           <button id="tour-run-button" className="btn btn-primary" onClick={onRun} disabled={isRunning}>
             {isRunning ? 'Compiling...' : 'Compile & Run'}

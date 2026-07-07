@@ -1,8 +1,6 @@
 import math
 
-# ==========================================
-# 1. HARDWARE PROFILES (The Silicon Truth)
-# ==========================================
+
 HARDWARE_PROFILES = {
     "A100_80GB": {
         "vram_gb": 80.0, "name": "NVIDIA A100 80GB", "bandwidth": 2034, "sram_kb": 192, 
@@ -25,6 +23,32 @@ HARDWARE_PROFILES = {
         "max_threads_per_sm": 1024, "cost_per_hour": 0.50
     }
 }
+
+
+def custom_arch_to_gpu_specs(arch: dict) -> dict:
+    """Translates the frontend Custom Architecture JSON into the engine's internal specs."""
+    compute = arch.get('compute', {})
+    memory = arch.get('memory', {})
+    power = arch.get('power', {})
+    
+    fp32_cores = compute.get('fp32_cores', 1024)
+    clock_mhz = compute.get('clock_mhz', 1500)
+    # Heuristic: TFLOPS = (Cores * 2 ops/FLOP * Clock_Hz) / 1e12
+    peak_tflops = (fp32_cores * 2 * clock_mhz * 1e6) / 1e12 
+    
+    warp_size = compute.get('warp_size', 32)
+    
+    return {
+        "vram_gb": memory.get('hbm_capacity_gb', 80.0),
+        "name": arch.get('name', 'Custom GPU'),
+        "bandwidth": memory.get('hbm_bandwidth_gb_s', 2034),
+        "sram_kb": memory.get('sram_kb_per_sm', 192),
+        "peak_tflops": peak_tflops,
+        "tdp_watts": power.get('tdp_watts', 300),
+        "max_regs_per_sm": 65536, 
+        "max_threads_per_sm": warp_size * 64, # Assuming 64 warps per SM max
+        "cost_per_hour": round(power.get('tdp_watts', 300) * 0.01, 2) # Heuristic cloud cost
+    }
 
 BYTES_PER_CYCLE = 1500 
 FLOPS_PER_CYCLE = 200000 
@@ -50,6 +74,7 @@ class GPUPhysicsEngine:
         self.timeline = []
         self.cycle_count = 0
         self.params = {}
+        self.gpu_specs = HARDWARE_PROFILES['A100_80GB'] # Default fallback
 
     def calculate_thermal_diffusion(self, heat_source_indices, heat_amount):
         new_map = self.thermal_map.copy()
@@ -82,17 +107,24 @@ class GPUPhysicsEngine:
             
         return True, ""
 
-    def generate_timeline(self, params: dict):
+
+    def generate_timeline(self, params: dict, custom_arch: dict = None):
         self.reset_state()
         self.params = params
         
-        hardware_key = params.get('hardware_profile', 'A100_80GB')
-        gpu_specs = HARDWARE_PROFILES.get(hardware_key, HARDWARE_PROFILES['A100_80GB'])
+
+        if custom_arch:
+            self.gpu_specs = custom_arch_to_gpu_specs(custom_arch)
+        else:
+            hardware_key = params.get('hardware_profile', 'A100_80GB')
+            self.gpu_specs = HARDWARE_PROFILES.get(hardware_key, HARDWARE_PROFILES['A100_80GB'])
+            
+        gpu_specs = self.gpu_specs
         
         is_valid, error_msg = self.validate_config(params, gpu_specs)
         if not is_valid:
             return {
-                "metadata": {"status": "INVALID_CONFIG", "error_message": error_msg, "hardware_profile": hardware_key, "total_cycles": 0},
+                "metadata": {"status": "INVALID_CONFIG", "error_message": error_msg, "hardware_profile": gpu_specs['name'], "total_cycles": 0},
                 "timeline": []
             }
 
@@ -118,7 +150,7 @@ class GPUPhysicsEngine:
 
         if total_requested_gb > available_vram_gb:
             return {
-                "metadata": {"status": "OOM_ERROR", "error_message": f"CUDA Out of Memory. Requested {total_requested_gb:.2f} GB, but only {available_vram_gb:.2f} GB is available.", "hardware_profile": hardware_key, "total_cycles": 0},
+                "metadata": {"status": "OOM_ERROR", "error_message": f"CUDA Out of Memory. Requested {total_requested_gb:.2f} GB, but only {available_vram_gb:.2f} GB is available.", "hardware_profile": gpu_specs['name'], "total_cycles": 0},
                 "memory_breakdown": memory_breakdown, "timeline": []
             }
 
@@ -215,7 +247,6 @@ class GPUPhysicsEngine:
             "ridge_point": round(peak_compute_gflops / peak_mem_bw, 2)
         }
 
-        # FinOps Cloud Cost Estimator Math
         base_clock_hz = 1500 * 1e6 
         true_wall_clock_seconds = true_total_cycles / base_clock_hz
         hourly_rate = gpu_specs.get('cost_per_hour', 3.50)
@@ -228,15 +259,17 @@ class GPUPhysicsEngine:
             "kernel_cost_usd": round(kernel_cost_usd, 8),
             "cost_per_million_runs": round(kernel_cost_usd * 1_000_000, 2)
         }
+        
         cupti_counters = self.generate_cupti_counters({
             "metadata": {"status": status, "occupancy_metrics": occupancy_metrics},
             "roofline_metrics": roofline_metrics,
             "memory_breakdown": memory_breakdown,
             "finops_metrics": finops_metrics
         })
+        
         return {
             "metadata": {
-                "status": status, "hardware_profile": hardware_key, 
+                "status": status, "hardware_profile": gpu_specs['name'], 
                 "total_cycles": self.cycle_count,
                 "occupancy_metrics": occupancy_metrics
             },
@@ -285,8 +318,8 @@ class GPUPhysicsEngine:
             pipeline_trace[3]["stage"] = "ASYNC MEM (Hidden)"
             pipeline_trace[3]["status"] = "OVERLAP"
 
-        hw_profile = self.params.get('hardware_profile', 'A100_80GB')
-        tdp = HARDWARE_PROFILES[hw_profile]['tdp_watts']
+
+        tdp = self.gpu_specs['tdp_watts']
         idle_power = tdp * 0.20
         
         math_power = (pipeline_trace[2]["cycles"] / 100.0) * (tdp * 0.60)
@@ -354,13 +387,14 @@ class GPUPhysicsEngine:
             }
         }
 
-    def run_single_simulation(self, params: dict):
+    
+    def run_single_simulation(self, params: dict, custom_arch: dict = None):
         self.reset_state()
-        return self.generate_timeline(params)
+        return self.generate_timeline(params, custom_arch)
 
-    def compare_configs(self, config_a: dict, config_b: dict):
-        result_a = self.run_single_simulation(config_a)
-        result_b = self.run_single_simulation(config_b)
+    def compare_configs(self, config_a: dict, config_b: dict, custom_arch_a: dict = None, custom_arch_b: dict = None):
+        result_a = self.run_single_simulation(config_a, custom_arch_a)
+        result_b = self.run_single_simulation(config_b, custom_arch_b)
         
         status_a = result_a['metadata']['status']
         status_b = result_b['metadata']['status']
@@ -406,13 +440,11 @@ class GPUPhysicsEngine:
             deltas['summary'] = "Both kernels ran Out of Memory."
 
         return {"kernel_a": result_a, "kernel_b": result_b, "deltas": deltas}
+
     def generate_cupti_counters(self, result: dict):
-        """Maps internal simulation metrics to realistic NVIDIA CUPTI hardware counter names."""
         occ = result['metadata'].get('occupancy_metrics', {})
         roof = result.get('roofline_metrics', {})
         mem = result.get('memory_breakdown', {})
-        
-        # Calculate mock sector counts (assuming 128-byte sectors)
         total_sectors = int((mem.get('total_requested_gb', 0) * 1e9) / 128)
         
         return {

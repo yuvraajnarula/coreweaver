@@ -14,9 +14,15 @@ async def simulation_handler(websocket):
             
             if data.get('type') == 'CONFIG':
                 params = data['params']
-                print(f"Received Config: {params}")
+
+                custom_arch = data.get('custom_arch') 
                 
-                result = await asyncio.to_thread(engine.generate_timeline, params)
+                print(f"Received Config: {params}")
+                if custom_arch:
+                    print(f"Using Custom Architecture: {custom_arch.get('name', 'Unknown')}")
+                
+                
+                result = await asyncio.to_thread(engine.generate_timeline, params, custom_arch)
                 
                 await websocket.send(json.dumps({"type": "METADATA", "data": result['metadata']}))
                 
@@ -30,7 +36,6 @@ async def simulation_handler(websocket):
                     if 'finops_metrics' in result:
                         await websocket.send(json.dumps({"type": "FINOPS", "data": result['finops_metrics']}))
                         
-                    
                     total_cycles = len(result['timeline'])
                     target_duration_sec = 8.0 
                     delay = target_duration_sec / total_cycles if total_cycles > 0 else 0.1

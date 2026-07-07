@@ -1,29 +1,11 @@
+
 import { create } from 'zustand';
+
 
 export interface SramAccess {
   thread_id: number;
   bank_id: number;
   address: number;
-}
-
-export interface CycleData {
-  cycle: number;
-  instruction: string;
-  description: string;
-  source_line: number;
-  generated_token: string;
-  pipeline_trace: PipelineStage[];
-  pipeline_metrics: PipelineMetrics;
-  micro_state: MicroState;
-  hardware_state: {
-    current_temperature: number;
-    clock_speed_mhz: number;
-    bank_conflict: boolean;
-    conflict_details?: string;
-    allocated_blocks: number[];
-    thermal_map: number[];
-    sram_access: SramAccess[];
-  };
 }
 
 export interface PipelineStage {
@@ -50,6 +32,26 @@ export interface MicroState {
     path_b_cycles: number;
     serialized_penalty: number;
   } | null;
+}
+
+export interface CycleData {
+  cycle: number;
+  instruction: string;
+  description: string;
+  source_line: number;
+  generated_token: string;
+  pipeline_trace: PipelineStage[];
+  pipeline_metrics: PipelineMetrics;
+  micro_state: MicroState;
+  hardware_state: {
+    current_temperature: number;
+    clock_speed_mhz: number;
+    bank_conflict: boolean;
+    conflict_details?: string;
+    allocated_blocks: number[];
+    thermal_map: number[];
+    sram_access: SramAccess[];
+  };
 }
 
 export interface SimulationMetadata {
@@ -92,9 +94,11 @@ export interface FinOpsMetrics {
   cost_per_million_runs: number;
 }
 
-export type ViewMode = 'memory' | 'thermal';
-
+// ==========================================
+// STATE INTERFACE
+// ==========================================
 interface SimulationState {
+  // Timeline & Playback
   currentCycleIndex: number;
   totalCycles: number;
   timeline: CycleData[];
@@ -104,16 +108,17 @@ interface SimulationState {
   play: () => void;
   pause: () => void;
 
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
-  
+  // Global Metrics (Updated via WebSocket)
   metadata: SimulationMetadata | null;
   memoryBreakdown: MemoryBreakdown | null;
   rooflineMetrics: RooflineMetrics | null;
   occupancyMetrics: OccupancyMetrics | null;
   finopsMetrics: FinOpsMetrics | null;
-  comparisonResult: any | null;
   
+  // Comparison State
+  comparisonResult: any | null;
+
+  // Actions
   addCycleToTimeline: (cycle: CycleData) => void;
   setMetadata: (meta: SimulationMetadata) => void;
   setMemoryBreakdown: (breakdown: MemoryBreakdown) => void;
@@ -126,18 +131,16 @@ interface SimulationState {
   clearComparisonResult: () => void;
 }
 
-export const useSimulationStore = create<SimulationState>((set, get) => ({
+// ==========================================
+// ZUSTAND STORE IMPLEMENTATION
+// ==========================================
+export const useSimulationStore = create<SimulationState>((set) => ({
+  // Initial State
   currentCycleIndex: 0,
   totalCycles: 0,
   timeline: [],
-  setCurrentCycleIndex: (index) => set({ currentCycleIndex: index }),
   
   isPlaying: true,
-  play: () => set({ isPlaying: true }),
-  pause: () => set({ isPlaying: false }),
-
-  viewMode: 'memory',
-  setViewMode: (mode) => set({ viewMode: mode }),
   
   metadata: null,
   memoryBreakdown: null,
@@ -145,11 +148,18 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
   occupancyMetrics: null,
   finopsMetrics: null,
   comparisonResult: null,
+
+  // Actions
+  setCurrentCycleIndex: (index) => set({ currentCycleIndex: index }),
   
+  play: () => set({ isPlaying: true }),
+  pause: () => set({ isPlaying: false }),
+
   addCycleToTimeline: (cycle) => set((state) => ({
     timeline: [...state.timeline, cycle],
     totalCycles: state.totalCycles + 1,
   })),
+  
   setMetadata: (meta) => set({ metadata: meta, totalCycles: meta.total_cycles }),
   setMemoryBreakdown: (breakdown) => set({ memoryBreakdown: breakdown }),
   setRooflineMetrics: (metrics) => set({ rooflineMetrics: metrics }),
@@ -167,5 +177,6 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     occupancyMetrics: null,
     finopsMetrics: null
   }),
+  
   clearComparisonResult: () => set({ comparisonResult: null }),
 }));

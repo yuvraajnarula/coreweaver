@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* Strict Dark Palette */
+  /* Strict Dark Palette (No pure black, layered grays) */
   --bg-base: #09090b;
   --bg-panel: #111113;
   --bg-elevated: #18181b;
@@ -39,19 +39,10 @@
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body, #root {
-  height: 100vh;
-  overflow: hidden; /* The shell handles scrolling, not the body */
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body, #root { height: 100vh; overflow: hidden; }
 
 /* Micro-typography for labels */
 .label {
@@ -70,21 +61,11 @@ body, #root {
   font-variant-numeric: tabular-nums;
 }
 
-/* Scrollbar styling for professional feel */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-default);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
-}
+/* Professional Scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 /* Base Button */
 .btn {
@@ -102,17 +83,6 @@ body, #root {
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.btn:hover {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-.btn-primary {
-  background: var(--text-primary);
-  color: var(--bg-base);
-  border-color: var(--text-primary);
-}
-.btn-primary:hover {
-  opacity: 0.9;
-  color: var(--bg-base);
-}
+.btn:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border-strong); }
+.btn-primary { background: var(--text-primary); color: var(--bg-base); border-color: var(--text-primary); }
+.btn-primary:hover { opacity: 0.9; color: var(--bg-base); }

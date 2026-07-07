@@ -5,10 +5,10 @@ import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from groq import AsyncGroq  # 🚀 Upgraded to AsyncGroq
+from groq import AsyncGroq
 from dotenv import load_dotenv
 from simulator import GPUPhysicsEngine
-import redis.asyncio as redis  # 🚀 Async Redis client
+import redis.asyncio as redis
 
 load_dotenv()
 
@@ -22,13 +22,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 api_key = os.getenv("GROQ_API_KEY")
 client = AsyncGroq(api_key=api_key) if api_key else None
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
 SHARE_TTL_SECONDS = 3600  # 1 Hour
+ARCH_TTL_SECONDS = 30 * 24 * 3600  # 30 Days for Custom Architectures
 
 class PromptRequest(BaseModel):
     prompt: str
@@ -39,12 +40,14 @@ class ShareRequest(BaseModel):
 class CompareRequest(BaseModel):
     config_a: dict
     config_b: dict
+    custom_arch_a: dict | None = None  # 🚀 NEW
+    custom_arch_b: dict | None = None  # 🚀 NEW
 
 class OptimizeRequest(BaseModel):
     simulation_summary: dict
 
 # ==========================================
-# 3. AI PROMPTS
+# AI PROMPTS
 # ==========================================
 SYSTEM_PROMPT = """
 You are an expert AI Hardware Compiler for the CoreWeaver GPU Simulator. 
@@ -60,9 +63,6 @@ CRITICAL RULES:
 - BLOCK_SIZE MUST be a multiple of 32 and <= 1024.
 - M, N, K MUST be > 0.
 - Return ONLY valid JSON. No markdown, no explanations, no code blocks.
-
-Example Output:
-{"M": 4096, "N": 4096, "K": 4096, "BLOCK_SIZE": 128, "hardware_profile": "RTX_4090"}
 """
 
 OPTIMIZATION_PROMPT = """
@@ -72,6 +72,9 @@ Focus on Triton/CUDA concepts like BLOCK_SIZE, memory coalescing, warp divergenc
 Keep the response concise, professional, and formatted as a bulleted list. Do not use emojis.
 """
 
+# ==========================================
+# ENDPOINTS
+# ==========================================
 
 @app.post("/api/analyze")
 async def analyze_prompt(req: PromptRequest):
@@ -104,42 +107,50 @@ async def analyze_prompt(req: PromptRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# 🚀 NEW: ARCHITECTURE PERSISTENCE
+@app.post("/api/architectures/save")
+async def save_architecture(payload: dict):
+    arch_id = uuid.uuid4().hex[:12]
+    await redis_client.setex(
+        f"arch:{arch_id}",
+        ARCH_TTL_SECONDS,
+        json.dumps(payload)
+    )
+    return {"arch_id": arch_id, "status": "saved", "ttl_seconds": ARCH_TTL_SECONDS}
+
+@app.get("/api/architectures/{arch_id}")
+async def get_architecture(arch_id: str):
+    val = await redis_client.get(f"arch:{arch_id}")
+    if not val:
+        raise HTTPException(status_code=404, detail="Architecture not found or expired.")
+    return json.loads(val)
 
 @app.post("/api/compare")
 async def compare_kernels(req: CompareRequest):
     try:
         engine = GPUPhysicsEngine()
-        result = await asyncio.to_thread(engine.compare_configs, req.config_a, req.config_b)
+        # 🚀 Pass custom architectures to the engine
+        result = await asyncio.to_thread(
+            engine.compare_configs, 
+            req.config_a, req.config_b, 
+            req.custom_arch_a, req.custom_arch_b
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/api/share")
 async def create_share_link(req: ShareRequest):
     share_id = uuid.uuid4().hex[:12] 
-    
-    await redis_client.setex(
-        f"share:{share_id}", 
-        SHARE_TTL_SECONDS, 
-        json.dumps(req.params)
-    )
-    
-    return {
-        "share_id": share_id, 
-        "ttl_seconds": SHARE_TTL_SECONDS
-    }
-
+    await redis_client.setex(f"share:{share_id}", SHARE_TTL_SECONDS, json.dumps(req.params))
+    return {"share_id": share_id, "ttl_seconds": SHARE_TTL_SECONDS}
 
 @app.get("/api/share/{share_id}")
 async def get_share_link(share_id: str):
     val = await redis_client.get(f"share:{share_id}")
-    
     if not val:
         raise HTTPException(status_code=404, detail="Link expired or not found.")
-        
     return {"params": json.loads(val)}
-
 
 @app.post("/api/optimize")
 async def optimize_kernel(req: OptimizeRequest):
@@ -148,8 +159,6 @@ async def optimize_kernel(req: OptimizeRequest):
 
     try:
         summary_text = json.dumps(req.simulation_summary, indent=2)
-        
-        
         response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
@@ -158,12 +167,10 @@ async def optimize_kernel(req: OptimizeRequest):
             ],
             temperature=0.3,
         )
-        
         suggestions = response.choices[0].message.content
         return {"status": "success", "suggestions": suggestions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 if __name__ == "__main__":
     import uvicorn
