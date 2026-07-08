@@ -61,6 +61,7 @@ export interface SimulationMetadata {
   total_cycles: number;
   occupancy_metrics?: OccupancyMetrics;
 }
+export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface OccupancyMetrics {
   regs_per_thread: number;
@@ -126,7 +127,8 @@ interface SimulationState {
   setOccupancyMetrics: (metrics: OccupancyMetrics) => void;
   setFinOpsMetrics: (metrics: FinOpsMetrics) => void;
   setComparisonResult: (result: any) => void;
-  
+  connectionStatus: ConnectionStatus;
+  setConnectionStatus: (status: ConnectionStatus) => void;
   clearTimeline: () => void;
   clearComparisonResult: () => void;
 }
@@ -159,6 +161,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     timeline: [...state.timeline, cycle],
     totalCycles: state.totalCycles + 1,
   })),
+  connectionStatus: 'disconnected',
+  setConnectionStatus: (status) => set({ connectionStatus: status }),
   
   setMetadata: (meta) => set({ metadata: meta, totalCycles: meta.total_cycles }),
   setMemoryBreakdown: (breakdown) => set({ memoryBreakdown: breakdown }),

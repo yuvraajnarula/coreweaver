@@ -91,6 +91,13 @@ class GPUPhysicsEngine:
         M, N, K = params['M'], params['N'], params['K']
         BLOCK_SIZE = params['BLOCK_SIZE']
 
+        total_elements = M * N * K
+        if total_elements > 10_000_000_000:  # 10 billion element limit
+            return False, f"Matrix size ({M}x{N}x{K} = {total_elements:,} elements) exceeds maximum compute limit (10B elements) to prevent browser memory exhaustion."
+        
+        if M > 100_000 or N > 100_000 or K > 100_000:
+            return False, "Individual matrix dimensions cannot exceed 100,000."
+
         if M <= 0 or N <= 0 or K <= 0:
             return False, "Matrix dimensions (M, N, K) must be strictly greater than 0."
         if BLOCK_SIZE % 32 != 0:
