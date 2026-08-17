@@ -1,4 +1,7 @@
+// ControlPanel.tsx - Kernel Configuration & Simulation Controls
 import { useSimulationStore } from '../store';
+import { STORY_PRESETS } from '../utils/storyPresets';
+import { runClientSimulation } from '../utils/clientSimulator';
 
 interface ControlPanelProps {
   params: any;
@@ -11,15 +14,63 @@ interface ControlPanelProps {
 }
 
 export function ControlPanel({ params, setParams, onRunSimulation, isRunning, onSetBaseline, onRunComparison, hasBaseline }: ControlPanelProps) {
-  const { metadata } = useSimulationStore();
-  console.log(metadata)
+  const { loadFullSimulation } = useSimulationStore();
+
   const updateParam = (key: string, value: any) => {
     setParams({ ...params, [key]: value });
   };
 
+  const handleSelectPreset = (presetId: string) => {
+    const preset = STORY_PRESETS.find(p => p.id === presetId);
+    if (preset) {
+      setParams(preset.params);
+      const result = runClientSimulation(preset.params);
+      loadFullSimulation(result);
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 800 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 800 }}>
       
+      {/* Story Presets Selector */}
+      <FieldGroup title="Interactive Story Presets" subtitle="Load curated micro-architectural scenarios">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+          {STORY_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              onClick={() => handleSelectPreset(preset.id)}
+              style={{
+                padding: '10px 12px',
+                background: 'var(--bg-base)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 6,
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent-blue)';
+                e.currentTarget.style.background = 'var(--bg-elevated)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border-default)';
+                e.currentTarget.style.background = 'var(--bg-base)';
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{preset.name}</span>
+                <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: 'var(--bg-elevated)', color: 'var(--accent-blue)' }}>
+                  {preset.badge}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.3 }}>
+                {preset.subtitle}
+              </div>
+            </button>
+          ))}
+        </div>
+      </FieldGroup>
+
       {/* Group 1: Matrix Dimensions */}
       <FieldGroup title="Matrix Dimensions" subtitle="Define the GEMM workload (M x N x K)">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
@@ -37,7 +88,7 @@ export function ControlPanel({ params, setParams, onRunSimulation, isRunning, on
             label="Hardware Profile" 
             value={params.hardware_profile} 
             onChange={(v) => updateParam('hardware_profile', v)}
-            options={['A100_80GB', 'H100_80GB', 'RTX_4090', 'MI300X']}
+            options={['A100_80GB', 'H100_80GB', 'RTX_4090', 'RTX_3090', 'MI300X', 'T4_16GB']}
           />
         </div>
       </FieldGroup>
@@ -74,8 +125,6 @@ export function ControlPanel({ params, setParams, onRunSimulation, isRunning, on
     </div>
   );
 }
-
-// --- Sub-components for strict design system ---
 
 function FieldGroup({ title, subtitle, children }: { title: string, subtitle: string, children: React.ReactNode }) {
   return (

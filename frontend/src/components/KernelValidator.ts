@@ -1,4 +1,5 @@
-import {type  CustomArchSpecs } from './SiliconConstraintEngine';
+// KernelValidator.ts - Custom Architecture Script Validator
+import { type CustomArchSpecs } from './SiliconConstraintEngine';
 
 export interface KernelValidationError {
   line: number | null;
@@ -11,7 +12,7 @@ export function validateKernelScript(code: string, arch: CustomArchSpecs): Kerne
   const lines = code.split('\n');
   
   let estimated_sram_bytes = 0;
-  lines.forEach((line, idx) => {
+  lines.forEach((line) => {
     const sharedMatch = line.match(/__shared__\s+(float|int|double|half)\s+\w+\s*\[(\d+)\]/);
     if (sharedMatch) {
       const typeSize = sharedMatch[1] === 'double' ? 8 : sharedMatch[1] === 'float' ? 4 : sharedMatch[1] === 'half' ? 2 : 4;
@@ -29,7 +30,6 @@ export function validateKernelScript(code: string, arch: CustomArchSpecs): Kerne
     });
   }
 
-  
   const vectorCount = (code.match(/float4|int4|double2/g) || []).length;
   const localVars = (code.match(/\b(float|int)\s+\w+\s*=/g) || []).length;
   
@@ -41,7 +41,6 @@ export function validateKernelScript(code: string, arch: CustomArchSpecs): Kerne
     });
   }
 
-  
   lines.forEach((line, idx) => {
     if (line.match(/if\s*\(.*threadIdx/)) {
       errors.push({

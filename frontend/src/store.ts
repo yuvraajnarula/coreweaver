@@ -1,6 +1,5 @@
-
+// store.ts - CoreWeaver Zustand State Store with Story Checkpointing & Guide Mode
 import { create } from 'zustand';
-
 
 export interface SramAccess {
   thread_id: number;
@@ -61,6 +60,7 @@ export interface SimulationMetadata {
   total_cycles: number;
   occupancy_metrics?: OccupancyMetrics;
 }
+
 export type ConnectionStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface OccupancyMetrics {
@@ -95,6 +95,17 @@ export interface FinOpsMetrics {
   cost_per_million_runs: number;
 }
 
+export interface StoryCheckpoint {
+  cycleIndex: number;
+  cycleNumber: number;
+  id: string;
+  title: string;
+  subtitle: string;
+  category: 'fetch' | 'sram' | 'compute' | 'throttle' | 'writeback';
+  description: string;
+  metricsSnapshot: string;
+}
+
 // ==========================================
 // STATE INTERFACE
 // ==========================================
@@ -108,8 +119,25 @@ interface SimulationState {
   isPlaying: boolean;
   play: () => void;
   pause: () => void;
+  playbackSpeed: number;
+  setPlaybackSpeed: (speed: number) => void;
 
-  // Global Metrics (Updated via WebSocket)
+  // Story Checkpointing
+  checkpoints: StoryCheckpoint[];
+  setCheckpoints: (cps: StoryCheckpoint[]) => void;
+  jumpToCheckpoint: (index: number) => void;
+
+  // Guide Mode
+  guideModeOpen: boolean;
+  setGuideMode: (open: boolean) => void;
+  currentGuideLesson: number;
+  setGuideLesson: (idx: number) => void;
+
+  // Configuration Params Synchronized
+  simParams: any;
+  setSimParams: (params: any) => void;
+
+  // Global Metrics (Updated via WebSocket or Client Sim)
   metadata: SimulationMetadata | null;
   memoryBreakdown: MemoryBreakdown | null;
   rooflineMetrics: RooflineMetrics | null;
@@ -129,9 +157,26 @@ interface SimulationState {
   setComparisonResult: (result: any) => void;
   connectionStatus: ConnectionStatus;
   setConnectionStatus: (status: ConnectionStatus) => void;
+  
+  loadFullSimulation: (data: {
+    metadata: SimulationMetadata;
+    memoryBreakdown?: MemoryBreakdown;
+    rooflineMetrics?: RooflineMetrics;
+    finopsMetrics?: FinOpsMetrics;
+    occupancyMetrics?: OccupancyMetrics;
+    timeline: CycleData[];
+    checkpoints?: StoryCheckpoint[];
+  }) => void;
+
   clearTimeline: () => void;
   clearComparisonResult: () => void;
 }
+
+const DEFAULT_PARAMS = {
+  M: 1024, N: 1024, K: 1024, BLOCK_SIZE: 128, hardware_profile: 'A100_80GB',
+  enable_divergence: false, coalesced_memory: true,
+  enable_async_copy: false, enable_fusion: false
+};
 
 // ==========================================
 // ZUSTAND STORE IMPLEMENTATION
@@ -142,26 +187,46 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   totalCycles: 0,
   timeline: [],
   
-  isPlaying: true,
-  
+  isPlaying: false,
+  playbackSpeed: 1,
+
+  checkpoints: [],
+  guideModeOpen: false,
+  currentGuideLesson: 0,
+  simParams: DEFAULT_PARAMS,
+
   metadata: null,
   memoryBreakdown: null,
   rooflineMetrics: null,
   occupancyMetrics: null,
   finopsMetrics: null,
   comparisonResult: null,
+  connectionStatus: 'disconnected',
 
   // Actions
-  setCurrentCycleIndex: (index) => set({ currentCycleIndex: index }),
+  setCurrentCycleIndex: (index) => set({ currentCycleIndex: Math.max(0, index) }),
   
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
+  setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
 
-  addCycleToTimeline: (cycle) => set((state) => ({
-    timeline: [...state.timeline, cycle],
-    totalCycles: state.totalCycles + 1,
-  })),
-  connectionStatus: 'disconnected',
+  setCheckpoints: (cps) => set({ checkpoints: cps }),
+  jumpToCheckpoint: (cycleIndex) => set({ currentCycleIndex: cycleIndex, isPlaying: false }),
+
+  setGuideMode: (open) => set({ guideModeOpen: open }),
+  setGuideLesson: (idx) => set({ currentGuideLesson: idx }),
+
+  setSimParams: (params) => set({ simParams: params }),
+
+  addCycleToTimeline: (cycle) => set((state) => {
+    const nextTimeline = [...state.timeline, cycle];
+    return {
+      timeline: nextTimeline,
+      totalCycles: nextTimeline.length,
+      currentCycleIndex: nextTimeline.length - 1
+    };
+  }),
+
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   
   setMetadata: (meta) => set({ metadata: meta, totalCycles: meta.total_cycles }),
@@ -171,6 +236,19 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setFinOpsMetrics: (metrics) => set({ finopsMetrics: metrics }),
   setComparisonResult: (result) => set({ comparisonResult: result }),
   
+  loadFullSimulation: (data) => set({
+    timeline: data.timeline,
+    totalCycles: data.timeline.length,
+    currentCycleIndex: 0,
+    metadata: data.metadata,
+    memoryBreakdown: data.memoryBreakdown || null,
+    rooflineMetrics: data.rooflineMetrics || null,
+    finopsMetrics: data.finopsMetrics || null,
+    occupancyMetrics: data.occupancyMetrics || null,
+    checkpoints: data.checkpoints || [],
+    isPlaying: false
+  }),
+
   clearTimeline: () => set({ 
     timeline: [], 
     totalCycles: 0, 
@@ -179,7 +257,9 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     memoryBreakdown: null,
     rooflineMetrics: null,
     occupancyMetrics: null,
-    finopsMetrics: null
+    finopsMetrics: null,
+    checkpoints: [],
+    isPlaying: false
   }),
   
   clearComparisonResult: () => set({ comparisonResult: null }),

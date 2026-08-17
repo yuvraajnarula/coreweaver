@@ -57,7 +57,7 @@ Your job is to translate their description into exact hardware simulation parame
 You must extract or calculate the following parameters:
 1. M, N, K: The matrix dimensions. If they just give a single number like "16k matrix", set M, N, and K to that number.
 2. BLOCK_SIZE: The Triton block size. Must be a multiple of 32 (e.g., 64, 128, 256). Default to 128 if unsure.
-3. hardware_profile: The GPU they are using. Must be one of: "A100_80GB", "RTX_4090", "RTX_3090", "T4_16GB". Default to "A100_80GB" if unsure.
+3. hardware_profile: The GPU they are using. Must be one of: "A100_80GB", "H100_80GB", "RTX_4090", "RTX_3090", "MI300X", "T4_16GB". Default to "A100_80GB" if unsure.
 
 CRITICAL RULES:
 - BLOCK_SIZE MUST be a multiple of 32 and <= 1024.

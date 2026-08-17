@@ -86,3 +86,13 @@ body, #root { height: 100vh; overflow: hidden; }
 .btn:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: var(--border-strong); }
 .btn-primary { background: var(--text-primary); color: var(--bg-base); border-color: var(--text-primary); }
 .btn-primary:hover { opacity: 0.9; color: var(--bg-base); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.92); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

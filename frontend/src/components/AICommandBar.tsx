@@ -1,5 +1,6 @@
-// AICommandBar.tsx
+// AICommandBar.tsx - Natural Language AI Hardware Compiler with Lucide Icons
 import { useState } from 'react';
+import { Sparkles, Terminal, ArrowRight, AlertCircle } from 'lucide-react';
 
 interface AICommandBarProps {
   onParamsExtracted: (params: any) => void;
@@ -30,10 +31,8 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
       }
 
       const data = await response.json();
-      
-      // Pass the extracted parameters up to the App to trigger the simulation!
       onParamsExtracted(data.params);
-      setPrompt(''); // Clear input
+      setPrompt('');
       
     } catch (err: any) {
       setError(err.message);
@@ -60,7 +59,7 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
         background: 'var(--bg-elevated)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-blue)' }} />
+          <Sparkles size={14} color="var(--accent-blue)" />
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Natural Language Compiler</span>
         </div>
         <span className="label" style={{ fontSize: 10 }}>
@@ -71,6 +70,9 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
       {/* Input Area */}
       <form onSubmit={handleSubmit} style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }}>
+            <Terminal size={14} />
+          </div>
           <input
             type="text"
             value={prompt}
@@ -81,7 +83,8 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
             style={{
               width: '100%',
               padding: '12px 16px',
-              paddingRight: '100px', // Space for the absolute button
+              paddingLeft: '34px',
+              paddingRight: '110px',
               background: 'var(--bg-base)',
               border: '1px solid var(--border-default)',
               borderRadius: 6,
@@ -112,10 +115,14 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
               fontSize: 11,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              transition: 'all 0.15s'
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
             }}
           >
-            {isLoading ? 'Parsing...' : 'Compile'}
+            <span>{isLoading ? 'Parsing...' : 'Compile'}</span>
+            {!isLoading && <ArrowRight size={11} />}
           </button>
         </div>
 
@@ -132,7 +139,7 @@ export function AICommandBar({ onParamsExtracted }: AICommandBarProps) {
             alignItems: 'center',
             gap: 8
           }}>
-            <span style={{ fontWeight: 600 }}>⚠</span>
+            <AlertCircle size={13} />
             <span>{error}</span>
           </div>
         )}

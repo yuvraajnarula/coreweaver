@@ -1,6 +1,8 @@
+// ArchitectureBuilder.tsx - Silicon Architecture Designer & Tape-Out Engine with Lucide Icons
 import { useState } from 'react';
-import {type CustomArchSpecs } from './SiliconConstraintEngine';
+import { type CustomArchSpecs } from './SiliconConstraintEngine';
 import { SiliconHealthPanel } from './SiliconHealthPanel';
+import { Cpu, Layers, Zap, Maximize2, X, CheckCircle2 } from 'lucide-react';
 
 const DEFAULT_ARCH: CustomArchSpecs = {
   name: 'Custom_GPU_v1', node_nm: 5,
@@ -13,7 +15,7 @@ type Section = 'compute' | 'memory' | 'power' | 'area';
 
 export function ArchitectureBuilder({ onClose, onSave }: { onClose: () => void, onSave: (arch: CustomArchSpecs) => void }) {
   const [arch, setArch] = useState<CustomArchSpecs>(DEFAULT_ARCH);
-  const [activeSection, setActiveSection] = useState<Section>('compute'); // 🚀 FIXED: State for tabs
+  const [activeSection, setActiveSection] = useState<Section>('compute');
 
   const updateCompute = (key: keyof typeof arch.compute, val: number) => setArch({ ...arch, compute: { ...arch.compute, [key]: val } });
   const updateMemory = (key: keyof typeof arch.memory, val: number) => setArch({ ...arch, memory: { ...arch.memory, [key]: val } });
@@ -36,15 +38,20 @@ export function ArchitectureBuilder({ onClose, onSave }: { onClose: () => void, 
           />
         </div>
         <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {/* 🚀 FIXED: Clickable NavItems */}
-          <NavItem icon="⬡" label="Compute Cluster" active={activeSection === 'compute'} onClick={() => setActiveSection('compute')} />
-          <NavItem icon="≡" label="Memory Hierarchy" active={activeSection === 'memory'} onClick={() => setActiveSection('memory')} />
-          <NavItem icon="⚡" label="Power & Thermal" active={activeSection === 'power'} onClick={() => setActiveSection('power')} />
-          <NavItem icon="◱" label="Area & Yield" active={activeSection === 'area'} onClick={() => setActiveSection('area')} />
+          <NavItem icon={Cpu} label="Compute Cluster" active={activeSection === 'compute'} onClick={() => setActiveSection('compute')} />
+          <NavItem icon={Layers} label="Memory Hierarchy" active={activeSection === 'memory'} onClick={() => setActiveSection('memory')} />
+          <NavItem icon={Zap} label="Power & Thermal" active={activeSection === 'power'} onClick={() => setActiveSection('power')} />
+          <NavItem icon={Maximize2} label="Area & Yield" active={activeSection === 'area'} onClick={() => setActiveSection('area')} />
         </div>
         <div style={{ padding: 16, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => onSave(arch)} style={{ flex: 1 }}>Tape-Out</button>
+          <button className="btn" onClick={onClose} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            <X size={12} />
+            <span>Cancel</span>
+          </button>
+          <button className="btn btn-primary" onClick={() => onSave(arch)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+            <CheckCircle2 size={12} />
+            <span>Tape-Out</span>
+          </button>
         </div>
       </aside>
 
@@ -52,49 +59,60 @@ export function ArchitectureBuilder({ onClose, onSave }: { onClose: () => void, 
       <main style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 340px', overflow: 'hidden' }}>
         <div style={{ padding: 32, overflowY: 'auto' }}>
           
-          {/* 🚀 FIXED: Dynamic Rendering based on activeSection */}
           {activeSection === 'compute' && (
             <>
-              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Compute & Execution Units</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Cpu size={20} color="var(--accent-blue)" />
+                <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Compute & Execution Units</h2>
+              </div>
               <p className="label" style={{ marginBottom: 24 }}>Define the core processing topology and clock speeds.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                <SliderInput label="Warp Size" value={arch.compute.warp_size} min={16} max={64} step={16} onChange={(v) => updateCompute('warp_size', v)} unit="threads" />
-                <SliderInput label="FP32 Cores" value={arch.compute.fp32_cores} min={128} max={16384} step={128} onChange={(v) => updateCompute('fp32_cores', v)} unit="cores" />
-                <SliderInput label="Tensor Cores" value={arch.compute.tensor_cores} min={0} max={1024} step={16} onChange={(v) => updateCompute('tensor_cores', v)} unit="cores" />
-                <SliderInput label="Clock Speed" value={arch.compute.clock_mhz} min={500} max={3000} step={50} onChange={(v) => updateCompute('clock_mhz', v)} unit="MHz" />
+                <SliderInput label="Warp Size" value={arch.compute.warp_size} min={16} max={64} step={16} onChange={(v: number) => updateCompute('warp_size', v)} unit="threads" />
+                <SliderInput label="FP32 Cores" value={arch.compute.fp32_cores} min={128} max={16384} step={128} onChange={(v: number) => updateCompute('fp32_cores', v)} unit="cores" />
+                <SliderInput label="Tensor Cores" value={arch.compute.tensor_cores} min={0} max={1024} step={16} onChange={(v: number) => updateCompute('tensor_cores', v)} unit="cores" />
+                <SliderInput label="Clock Speed" value={arch.compute.clock_mhz} min={500} max={3000} step={50} onChange={(v: number) => updateCompute('clock_mhz', v)} unit="MHz" />
               </div>
             </>
           )}
 
           {activeSection === 'memory' && (
             <>
-              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Memory Hierarchy</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Layers size={20} color="var(--accent-blue)" />
+                <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Memory Hierarchy</h2>
+              </div>
               <p className="label" style={{ marginBottom: 24 }}>Configure the silicon memory stack from registers to HBM.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                <SliderInput label="Registers / Thread" value={arch.memory.regs_per_thread} min={32} max={255} step={8} onChange={(v) => updateMemory('regs_per_thread', v)} unit="regs" />
-                <SliderInput label="Shared Memory (SRAM)" value={arch.memory.sram_kb_per_sm} min={16} max={512} step={16} onChange={(v) => updateMemory('sram_kb_per_sm', v)} unit="KB" />
-                <SliderInput label="HBM Capacity" value={arch.memory.hbm_capacity_gb} min={8} max={192} step={8} onChange={(v) => updateMemory('hbm_capacity_gb', v)} unit="GB" />
-                <SliderInput label="HBM Bandwidth" value={arch.memory.hbm_bandwidth_gb_s} min={100} max={4000} step={100} onChange={(v) => updateMemory('hbm_bandwidth_gb_s', v)} unit="GB/s" />
+                <SliderInput label="Registers / Thread" value={arch.memory.regs_per_thread} min={32} max={255} step={8} onChange={(v: number) => updateMemory('regs_per_thread', v)} unit="regs" />
+                <SliderInput label="Shared Memory (SRAM)" value={arch.memory.sram_kb_per_sm} min={16} max={512} step={16} onChange={(v: number) => updateMemory('sram_kb_per_sm', v)} unit="KB" />
+                <SliderInput label="HBM Capacity" value={arch.memory.hbm_capacity_gb} min={8} max={192} step={8} onChange={(v: number) => updateMemory('hbm_capacity_gb', v)} unit="GB" />
+                <SliderInput label="HBM Bandwidth" value={arch.memory.hbm_bandwidth_gb_s} min={100} max={4000} step={100} onChange={(v: number) => updateMemory('hbm_bandwidth_gb_s', v)} unit="GB/s" />
               </div>
             </>
           )}
 
           {activeSection === 'power' && (
             <>
-              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Power & Thermal Envelope</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Zap size={20} color="var(--accent-blue)" />
+                <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Power & Thermal Envelope</h2>
+              </div>
               <p className="label" style={{ marginBottom: 24 }}>Define the physical power limits and cooling capacity.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                <SliderInput label="TDP Limit" value={arch.power.tdp_watts} min={50} max={700} step={10} onChange={(v) => updatePower('tdp_watts', v)} unit="Watts" />
-                <SliderInput label="Thermal Throttle Limit" value={arch.power.thermal_limit_c} min={60} max={105} step={1} onChange={(v) => updatePower('thermal_limit_c', v)} unit="°C" />
-                <SliderInput label="Process Node" value={arch.node_nm} min={3} max={14} step={1} onChange={(v) => setArch({...arch, node_nm: v})} unit="nm" />
-                <SliderInput label="Leakage Factor" value={arch.power.leakage_factor * 100} min={5} max={40} step={1} onChange={(v) => updatePower('leakage_factor', v / 100)} unit="%" />
+                <SliderInput label="TDP Limit" value={arch.power.tdp_watts} min={50} max={700} step={10} onChange={(v: number) => updatePower('tdp_watts', v)} unit="Watts" />
+                <SliderInput label="Thermal Throttle Limit" value={arch.power.thermal_limit_c} min={60} max={105} step={1} onChange={(v: number) => updatePower('thermal_limit_c', v)} unit="°C" />
+                <SliderInput label="Process Node" value={arch.node_nm} min={3} max={14} step={1} onChange={(v: number) => setArch({...arch, node_nm: v})} unit="nm" />
+                <SliderInput label="Leakage Factor" value={arch.power.leakage_factor * 100} min={5} max={40} step={1} onChange={(v: number) => updatePower('leakage_factor', v / 100)} unit="%" />
               </div>
             </>
           )}
 
           {activeSection === 'area' && (
             <>
-              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Silicon Area & Yield Estimator</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Maximize2 size={20} color="var(--accent-blue)" />
+                <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Silicon Area & Yield Estimator</h2>
+              </div>
               <p className="label" style={{ marginBottom: 24 }}>Physical footprint and manufacturing viability based on current specs.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                 <div style={{ padding: 24, background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
@@ -129,8 +147,7 @@ export function ArchitectureBuilder({ onClose, onSave }: { onClose: () => void, 
   );
 }
 
-// 🚀 FIXED: NavItem now accepts onClick and active boolean
-function NavItem({ icon, label, active, onClick }: { icon: string, label: string, active: boolean, onClick: () => void }) {
+function NavItem({ icon: Icon, label, active, onClick }: { icon: typeof Cpu, label: string, active: boolean, onClick: () => void }) {
   return (
     <div 
       onClick={onClick}
@@ -142,12 +159,23 @@ function NavItem({ icon, label, active, onClick }: { icon: string, label: string
         transition: 'all 0.15s'
       }}
     >
-      <span style={{ fontSize: 14 }}>{icon}</span> {label}
+      <Icon size={14} />
+      <span>{label}</span>
     </div>
   );
 }
 
-function SliderInput({ label, value, min, max, step, onChange, unit }: any) {
+interface SliderInputProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  unit: string;
+}
+
+function SliderInput({ label, value, min, max, step, onChange, unit }: SliderInputProps) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>

@@ -1,4 +1,6 @@
-import { useState } from 'react';
+// CICDRegressionView.tsx - CI/CD Performance Regression Verification Modal with Lucide Icons
+import { useState, useEffect } from 'react';
+import { GitCommit, CheckCircle2, AlertTriangle, X, Activity } from 'lucide-react';
 
 interface CIRegressionViewProps {
   currentParams: any;
@@ -9,10 +11,10 @@ export function CIRegressionView({ currentParams, onClose }: CIRegressionViewPro
   const [logs, setLogs] = useState<string[]>([]);
   const [status, setStatus] = useState<'running' | 'passed' | 'failed'>('running');
 
-  useState(() => {
+  useEffect(() => {
     // Simulate CI pipeline execution
     const baselineBlock = 128;
-    const currentBlock = currentParams.BLOCK_SIZE;
+    const currentBlock = Number(currentParams.BLOCK_SIZE) || 128;
     
     const pipelineSteps = [
       { msg: 'Setting up CoreWeaver Physics Engine v1.0.0...', delay: 300 },
@@ -22,17 +24,17 @@ export function CIRegressionView({ currentParams, onClose }: CIRegressionViewPro
       { msg: 'Executing comparative physics simulation...', delay: 800 },
     ];
 
-    // Determine pass/fail based on mock logic (e.g., if they dropped block size below 64, fail)
-    const isRegression = currentBlock < 64 || currentParams.enable_divergence;
+    // Determine pass/fail based on physics rules
+    const isRegression = currentBlock < 64 || !!currentParams.enable_divergence;
     
     if (isRegression) {
-      pipelineSteps.push({ msg: '[WARN] Thermal throttling detected in target branch.', delay: 400 });
-      pipelineSteps.push({ msg: '[WARN] Warp divergence penalty increased cycle count by 12%.', delay: 400 });
+      pipelineSteps.push({ msg: '[WARN] Sub-optimal block size or warp divergence detected in target branch.', delay: 400 });
+      pipelineSteps.push({ msg: '[WARN] Divergence penalty increased cycle latency by >10%.', delay: 400 });
       pipelineSteps.push({ msg: 'Result: REGRESSION DETECTED. Performance dropped below 5% threshold.', delay: 300 });
     } else {
-      pipelineSteps.push({ msg: '[INFO] Target branch arithmetic intensity matches baseline.', delay: 400 });
-      pipelineSteps.push({ msg: '[INFO] No thermal throttling or pipeline bubbles detected.', delay: 400 });
-      pipelineSteps.push({ msg: 'Result: PASS. Performance within 2% of baseline.', delay: 300 });
+      pipelineSteps.push({ msg: '[INFO] Target branch arithmetic intensity matches baseline expectations.', delay: 400 });
+      pipelineSteps.push({ msg: '[INFO] No severe thermal throttling or pipeline stalls detected.', delay: 400 });
+      pipelineSteps.push({ msg: 'Result: PASS. Performance is within acceptable HPC tolerances.', delay: 300 });
     }
 
     let currentLogIndex = 0;
@@ -44,48 +46,62 @@ export function CIRegressionView({ currentParams, onClose }: CIRegressionViewPro
         clearInterval(interval);
         setStatus(isRegression ? 'failed' : 'passed');
       }
-    }, 500);
+    }, 450);
 
     return () => clearInterval(interval);
-  });
+  }, [currentParams]);
 
   return (
     <div style={{ 
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
       background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center',
-      zIndex: 1000
+      zIndex: 2000, backdropFilter: 'blur(6px)'
     }}>
       <div style={{ 
-        background: '#0d1117', width: '700px', maxHeight: '80vh', borderRadius: '8px', 
-        border: '1px solid #30363d', display: 'flex', flexDirection: 'column', overflow: 'hidden'
+        background: 'var(--bg-panel)', width: '700px', maxHeight: '80vh', borderRadius: '12px', 
+        border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
       }}>
         <div style={{ 
-          padding: '1rem', borderBottom: '1px solid #30363d', 
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+          padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', 
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: 'var(--bg-elevated)'
         }}>
-          <h3 style={{ margin: 0, color: '#c9d1d9', fontSize: '1rem' }}>
-            CI/CD Performance Regression Check
-          </h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '1.2rem' }}>
-            X
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <GitCommit size={16} color="var(--accent-blue)" />
+            <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600 }}>
+              CI/CD Kernel Regression Benchmark
+            </h3>
+          </div>
+          <button className="btn" onClick={onClose} style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <X size={12} />
+            <span>Close</span>
           </button>
         </div>
         
-        <div style={{ flex: 1, padding: '1rem', overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+        <div style={{ flex: 1, padding: '16px', overflowY: 'auto', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg-base)' }}>
           {logs.map((log, i) => (
-            <div key={i} style={{ color: log.includes('[WARN]') ? '#d29922' : log.includes('[INFO]') ? '#58a6ff' : '#c9d1d9', marginBottom: '0.5rem' }}>
-              {log}
+            <div key={i} style={{ 
+              color: log.includes('[WARN]') ? 'var(--accent-amber)' : log.includes('[INFO]') ? 'var(--accent-blue)' : log.includes('PASS') ? 'var(--accent-green)' : log.includes('REGRESSION') ? 'var(--accent-red)' : 'var(--text-secondary)', 
+              marginBottom: '6px', lineHeight: 1.5, display: 'flex', alignItems: 'center', gap: 6 
+            }}>
+              <Activity size={10} style={{ opacity: 0.5 }} />
+              <span>{log}</span>
             </div>
           ))}
           
           {status !== 'running' && (
             <div style={{ 
-              marginTop: '1rem', padding: '0.75rem', borderRadius: '4px', fontWeight: 'bold',
-              background: status === 'passed' ? 'rgba(63, 185, 80, 0.1)' : 'rgba(248, 81, 73, 0.1)',
-              color: status === 'passed' ? '#3fb950' : '#f85149',
-              border: `1px solid ${status === 'passed' ? '#3fb950' : '#f85149'}`
+              marginTop: '16px', padding: '12px', borderRadius: '6px', fontWeight: 600,
+              background: status === 'passed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              color: status === 'passed' ? 'var(--accent-green)' : 'var(--accent-red)',
+              border: `1px solid ${status === 'passed' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
             }}>
-              Pipeline {status === 'passed' ? 'PASSED' : 'FAILED'}
+              {status === 'passed' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              <span>Pipeline Result: {status === 'passed' ? 'ALL CHECKS PASSED' : 'PERFORMANCE REGRESSION DETECTED'}</span>
             </div>
           )}
         </div>

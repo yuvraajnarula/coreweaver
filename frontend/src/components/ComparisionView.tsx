@@ -1,3 +1,4 @@
+// ComparisionView.tsx - A/B Kernel Performance Delta View
 import { useSimulationStore } from '../store';
 
 export function ComparisonView() {
@@ -5,11 +6,11 @@ export function ComparisonView() {
   
   if (!comparisonResult) return null;
 
-  const { config_a, config_b, metrics_a, metrics_b, verdict } = comparisonResult;
+  const { metrics_a, metrics_b, verdict } = comparisonResult;
 
   // Helper to format delta
   const getDelta = (a: number, b: number, invertColor = false) => {
-    const delta = ((b - a) / a) * 100;
+    const delta = ((b - a) / (a || 1)) * 100;
     const isPositive = delta > 0;
     const color = invertColor 
       ? (isPositive ? 'var(--accent-red)' : 'var(--accent-green)') 
@@ -22,11 +23,11 @@ export function ComparisonView() {
   };
 
   const rows = [
-    { label: 'Total Latency (Cycles)', a: metrics_a.total_cycles, b: metrics_b.total_cycles, unit: 'cy', invert: true },
-    { label: 'Achieved GFLOPS', a: metrics_a.achieved_gflops, b: metrics_b.achieved_gflops, unit: 'GFLOPS', invert: false },
-    { label: 'Arithmetic Intensity', a: metrics_a.arithmetic_intensity, b: metrics_b.arithmetic_intensity, unit: 'FLOP/byte', invert: false },
-    { label: 'Occupancy', a: metrics_a.occupancy_pct, b: metrics_b.occupancy_pct, unit: '%', invert: false },
-    { label: 'Kernel Cost', a: metrics_a.kernel_cost_usd, b: metrics_b.kernel_cost_usd, unit: 'USD', invert: true, isCurrency: true },
+    { label: 'Total Latency (Cycles)', a: metrics_a?.total_cycles || 0, b: metrics_b?.total_cycles || 0, unit: 'cy', invert: true },
+    { label: 'Achieved GFLOPS', a: metrics_a?.achieved_gflops || 0, b: metrics_b?.achieved_gflops || 0, unit: 'GFLOPS', invert: false },
+    { label: 'Arithmetic Intensity', a: metrics_a?.arithmetic_intensity || 0, b: metrics_b?.arithmetic_intensity || 0, unit: 'FLOP/byte', invert: false },
+    { label: 'Occupancy', a: metrics_a?.occupancy_pct || 0, b: metrics_b?.occupancy_pct || 0, unit: '%', invert: false },
+    { label: 'Kernel Cost', a: metrics_a?.kernel_cost_usd || 0, b: metrics_b?.kernel_cost_usd || 0, unit: 'USD', invert: true, isCurrency: true },
   ];
 
   return (

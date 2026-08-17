@@ -1,94 +1,117 @@
+// ModernExecutionView.tsx - TMA Asynchronous Copy & FlashAttention Fusion Visualizer with Lucide Icons
 import { useSimulationStore } from '../store';
+import { RefreshCw, Dna, Zap, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export function ModernExecutionView() {
-  const { timeline, currentCycleIndex, memoryBreakdown, rooflineMetrics } = useSimulationStore();
+  const { timeline, currentCycleIndex, rooflineMetrics, simParams } = useSimulationStore();
   const currentCycle = timeline[currentCycleIndex];
 
   if (!currentCycle || !currentCycle.pipeline_trace) return null;
 
   const isAsyncActive = currentCycle.pipeline_trace.some(s => s.status === 'OVERLAP');
-  const isFused = rooflineMetrics && memoryBreakdown; // We can infer fusion if we want, or just check params
+  const isFusedActive = !!simParams?.enable_fusion || (rooflineMetrics ? rooflineMetrics.arithmetic_intensity > 5.0 : false);
 
   return (
     <div style={{ 
-      background: '#1e1e1e', borderRadius: '8px', padding: '1.5rem', 
-      marginTop: '1rem', border: '1px solid #333', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem'
+      background: 'var(--bg-base)', borderRadius: '8px', padding: '16px', 
+      border: '1px solid var(--border-subtle)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'
     }}>
-      {/* 1. ASYNC OVERLAP VISUALIZER */}
-      <div>
-        <h4 style={{ margin: '0 0 0.5rem 0', color: '#c9d1d9', fontSize: '0.9rem' }}>
-          🔄 Async Memory Copy (TMA)
-        </h4>
-        <div style={{ 
-          padding: '1rem', background: '#0d1117', borderRadius: '6px', border: '1px solid #30363d',
-          display: 'flex', flexDirection: 'column', gap: '0.5rem'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <div style={{ width: '12px', height: '12px', background: isAsyncActive ? '#3fb950' : '#8b949e', borderRadius: '50%' }} />
-            <span style={{ color: isAsyncActive ? '#3fb950' : '#8b949e', fontWeight: 'bold' }}>
-              {isAsyncActive ? 'OVERLAP ACTIVE' : 'STALLED'}
-            </span>
+      {/* 1. ASYNC OVERLAP VISUALIZER (TMA) */}
+      <div style={{
+        padding: '14px', background: 'var(--bg-panel)', borderRadius: '6px', border: '1px solid var(--border-subtle)',
+        display: 'flex', flexDirection: 'column', gap: '8px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <RefreshCw size={14} color="var(--accent-blue)" />
+            <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>
+              Async Memory Copy (TMA)
+            </h4>
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#888', lineHeight: '1.4' }}>
-            {isAsyncActive 
-              ? 'Memory loads are successfully hidden behind Tensor Core compute. 0 pipeline stalls.' 
-              : 'Pipeline is waiting on VRAM. Memory and Compute are serialized.'}
+          <span style={{
+            fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
+            background: isAsyncActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+            color: isAsyncActive ? 'var(--accent-green)' : 'var(--accent-amber)',
+            border: `1px solid ${isAsyncActive ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+            display: 'flex', alignItems: 'center', gap: 4
+          }}>
+            {isAsyncActive ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+            {isAsyncActive ? 'OVERLAP ACTIVE' : 'STALLED / SERIALLY FETCHING'}
+          </span>
+        </div>
+        
+        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+          {isAsyncActive 
+            ? 'Memory loads are successfully hidden behind Tensor Core compute. 0 pipeline stall bubbles.' 
+            : 'Standard memory pipeline. Tensor cores are waiting on VRAM transaction completion.'}
+        </div>
+        
+        {/* Mini Pipeline Visual */}
+        <div style={{ display: 'flex', gap: '3px', marginTop: '4px' }}>
+          <div style={{ flex: 1, height: '20px', background: 'var(--accent-green)', borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 600, color: '#fff' }}>
+            COMPUTE (Tensor)
           </div>
-          
-          {/* Mini Pipeline Visual */}
-          <div style={{ display: 'flex', gap: '2px', marginTop: '0.5rem' }}>
-            <div style={{ flex: 1, height: '16px', background: '#3fb950', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', color: '#fff' }}>
-              COMPUTE
-            </div>
-            <div style={{ 
-              flex: isAsyncActive ? 0.1 : 1, 
-              height: '16px', 
-              background: isAsyncActive ? 'rgba(63, 185, 80, 0.3)' : '#f0883e', 
-              borderRadius: '2px', 
-              border: isAsyncActive ? '1px dashed #3fb950' : 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', color: '#fff',
-              transition: 'flex 0.5s ease'
-            }}>
-              {isAsyncActive ? '' : 'MEM'}
-            </div>
+          <div style={{ 
+            flex: isAsyncActive ? 0.15 : 1, 
+            height: '20px', 
+            background: isAsyncActive ? 'rgba(16, 185, 129, 0.3)' : 'var(--accent-amber)', 
+            borderRadius: '3px', 
+            border: isAsyncActive ? '1px dashed var(--accent-green)' : 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 600, color: '#fff',
+            transition: 'flex 0.3s ease'
+          }}>
+            {isAsyncActive ? <Zap size={11} /> : 'HBM WAIT'}
           </div>
         </div>
       </div>
 
       {/* 2. KERNEL FUSION (FLASHATTENTION) IMPACT */}
-      <div>
-        <h4 style={{ margin: '0 0 0.5rem 0', color: '#c9d1d9', fontSize: '0.9rem' }}>
-          🧬 Kernel Fusion (FlashAttention)
-        </h4>
-        <div style={{ 
-          padding: '1rem', background: '#0d1117', borderRadius: '6px', border: '1px solid #30363d',
-          display: 'flex', flexDirection: 'column', gap: '0.5rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#888', fontSize: '0.8rem' }}>Arithmetic Intensity</span>
-            <span style={{ color: '#00ffcc', fontWeight: 'bold', fontSize: '1.2rem' }}>
-              {rooflineMetrics?.arithmetic_intensity.toFixed(1)} FLOP/Byte
-            </span>
+      <div style={{ 
+        padding: '14px', background: 'var(--bg-panel)', borderRadius: '6px', border: '1px solid var(--border-subtle)',
+        display: 'flex', flexDirection: 'column', gap: '8px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Dna size={14} color="var(--accent-blue)" />
+            <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>
+              Kernel Fusion (FlashAttention)
+            </h4>
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#888', lineHeight: '1.4' }}>
-            {rooflineMetrics && rooflineMetrics.arithmetic_intensity > 150 
-              ? 'Fusion active: Intermediate matrices kept in SRAM. High Arithmetic Intensity.'
-              : 'Standard execution: Intermediate matrices written to VRAM. Lower Arithmetic Intensity.'}
-          </div>
-          
-          {/* Roofline Position Indicator */}
-          <div style={{ marginTop: '0.5rem', height: '8px', background: 'linear-gradient(to right, #58a6ff, #f85149)', borderRadius: '4px', position: 'relative' }}>
-            <div style={{ 
-              position: 'absolute', top: '-4px', 
-              left: `${Math.min(95, (rooflineMetrics?.arithmetic_intensity || 0) / 3)}%`, 
-              width: '16px', height: '16px', background: '#00ffcc', borderRadius: '50%', border: '2px solid #fff',
-              transform: 'translateX(-50%)', transition: 'left 0.5s ease'
-            }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#666', marginTop: '4px' }}>
-            <span>Memory Bound</span>
-            <span>Compute Bound</span>
-          </div>
+          <span style={{
+            fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px',
+            background: isFusedActive ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-elevated)',
+            color: isFusedActive ? 'var(--accent-blue)' : 'var(--text-tertiary)',
+            border: `1px solid ${isFusedActive ? 'rgba(59, 130, 246, 0.3)' : 'var(--border-subtle)'}`
+          }}>
+            {isFusedActive ? 'FUSED KERNEL' : 'UNFUSED'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}>Arithmetic Intensity</span>
+          <span className="data" style={{ color: 'var(--accent-blue)', fontWeight: 600, fontSize: '14px' }}>
+            {rooflineMetrics ? rooflineMetrics.arithmetic_intensity.toFixed(2) : '0.00'} FLOP/Byte
+          </span>
+        </div>
+
+        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+          {isFusedActive
+            ? 'Fusion active: Intermediate matrices kept in fast SRAM. Bypasses 50% VRAM memory bandwidth.'
+            : 'Standard execution: Intermediate matrices written and re-read from slow VRAM.'}
+        </div>
+        
+        {/* Roofline Position Indicator */}
+        <div style={{ marginTop: '4px', height: '6px', background: 'var(--bg-elevated)', borderRadius: '3px', position: 'relative', overflow: 'visible' }}>
+          <div style={{ 
+            height: '100%', 
+            width: `${Math.min(100, Math.max(10, ((rooflineMetrics?.arithmetic_intensity || 1) / (rooflineMetrics?.ridge_point ? rooflineMetrics.ridge_point * 2 : 10)) * 100))}%`, 
+            background: 'linear-gradient(to right, var(--accent-amber), var(--accent-green))', 
+            borderRadius: '3px' 
+          }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-tertiary)' }}>
+          <span>Memory-Bound (VRAM Wait)</span>
+          <span>Compute-Bound (Tensor Cores)</span>
         </div>
       </div>
     </div>

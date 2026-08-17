@@ -1,6 +1,8 @@
+// WorkflowToolbar.tsx - Enterprise Workflow Controls with Lucide Icons
 import { useRef, useState } from "react";
 import { useSimulationStore } from "../store";
 import { CIRegressionView } from "./CICDRegressionView";
+import { Share2, Download, Activity, FileUp, Check } from 'lucide-react';
 
 interface WorkflowToolbarProps {
   params: any;
@@ -23,7 +25,6 @@ export function WorkflowToolbar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showCICheck, setShowCICheck] = useState(false);
 
-  // State for share link feedback
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
 
@@ -66,13 +67,16 @@ export function WorkflowToolbar({
       await navigator.clipboard.writeText(shareUrl);
 
       const ttlMinutes = Math.floor(data.ttl_seconds / 60);
-      setShareMessage(`Link copied. Expires in ${ttlMinutes}m.`);
+      setShareMessage(`Copied! Expires in ${ttlMinutes}m`);
 
-      // Clear message after 4 seconds
       setTimeout(() => setShareMessage(""), 4000);
-    } catch (err) {
-      setShareMessage("Failed to generate link.");
-      console.error(err);
+    } catch {
+      // Fallback client URL parameter sharing
+      const shareParams = encodeURIComponent(JSON.stringify(params));
+      const fallbackUrl = `${window.location.origin}?config=${shareParams}`;
+      await navigator.clipboard.writeText(fallbackUrl);
+      setShareMessage("Direct link copied to clipboard!");
+      setTimeout(() => setShareMessage(""), 4000);
     } finally {
       setIsGeneratingLink(false);
     }
@@ -87,14 +91,15 @@ export function WorkflowToolbar({
       try {
         const json = JSON.parse(event.target?.result as string);
 
-        if (json.simParams) {
-          setParams(json.simParams);
-          setTimeout(() => onRunSimulation(json.simParams), 100);
-          alert("PyTorch Trace imported and simulation started");
+        if (json.simParams || json.params) {
+          const importedParams = json.simParams || json.params;
+          setParams(importedParams);
+          setTimeout(() => onRunSimulation(importedParams), 100);
+          alert("PyTorch / CoreWeaver Trace imported and simulation started.");
         } else {
-          alert('Invalid Trace File: Missing "simParams" object.');
+          alert('Invalid Trace File: Missing "simParams" or "params" object.');
         }
-      } catch (err) {
+      } catch {
         alert("Failed to parse JSON file.");
       }
     };
@@ -132,39 +137,44 @@ export function WorkflowToolbar({
   return (
     <div
       style={{
-        background: "#161b22",
+        background: "var(--bg-panel)",
         borderRadius: "8px",
-        padding: "1rem",
-        border: "1px solid #30363d",
-        marginBottom: "1rem",
+        padding: "12px 16px",
+        border: "1px solid var(--border-subtle)",
         display: "flex",
-        gap: "1rem",
+        gap: "10px",
         alignItems: "center",
         flexWrap: "wrap",
       }}
     >
       <span
-        style={{ color: "#8b949e", fontSize: "0.85rem", fontWeight: "bold" }}
+        style={{ color: "var(--text-tertiary)", fontSize: "11px", fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}
       >
         Enterprise Workflow:
       </span>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
         <button
           onClick={handleShare}
           disabled={isGeneratingLink}
-          style={btnStyle("#58a6ff", isGeneratingLink)}
+          className="btn"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}
         >
-          {isGeneratingLink ? "Generating..." : "Generate Share Link"}
+          <Share2 size={12} color="var(--accent-blue)" />
+          <span>{isGeneratingLink ? "Generating..." : "Generate Share Link"}</span>
         </button>
         {shareMessage && (
           <span
             style={{
-              fontSize: "0.75rem",
-              color: "#3fb950",
-              fontWeight: "bold",
+              fontSize: "11px",
+              color: "var(--accent-green)",
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
             }}
           >
+            <Check size={11} />
             {shareMessage}
           </span>
         )}
@@ -173,19 +183,30 @@ export function WorkflowToolbar({
       <button
         onClick={handleExport}
         disabled={timeline.length === 0}
-        style={btnStyle("#3fb950", timeline.length === 0)}
+        className="btn"
+        style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}
       >
-        Export Telemetry (JSON)
+        <Download size={12} color="var(--accent-green)" />
+        <span>Export Telemetry (JSON)</span>
       </button>
-      <button onClick={() => setShowCICheck(true)} style={btnStyle("#d29922")}>
-        Run CI Regression Check
+
+      <button 
+        onClick={() => setShowCICheck(true)} 
+        className="btn"
+        style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}
+      >
+        <Activity size={12} color="var(--accent-amber)" />
+        <span>Run CI Regression Check</span>
       </button>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
         <button
           onClick={() => fileInputRef.current?.click()}
-          style={btnStyle("#bc8cff")}
+          className="btn"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}
         >
-          Import PyTorch Trace
+          <FileUp size={12} color="#c084fc" />
+          <span>Import PyTorch Trace</span>
         </button>
         <input
           type="file"
@@ -196,28 +217,18 @@ export function WorkflowToolbar({
         />
         <button
           onClick={downloadMockTrace}
+          className="btn"
           style={{
-            ...btnStyle("#484f58"),
-            fontSize: "0.75rem",
-            padding: "0.4rem 0.8rem",
+            fontSize: "10px",
+            padding: "4px 8px",
+            color: "var(--text-tertiary)"
           }}
         >
-          (Download Mock)
+          (Sample Mock)
         </button>
       </div>
+
       {showCICheck && <CIRegressionView currentParams={params} onClose={() => setShowCICheck(false)} />}
     </div>
   );
 }
-
-const btnStyle = (color: string, disabled = false): React.CSSProperties => ({
-  padding: "0.5rem 1rem",
-  background: disabled ? "#21262d" : "transparent",
-  color: disabled ? "#484f58" : color,
-  border: `1px solid ${disabled ? "#30363d" : color}`,
-  borderRadius: "6px",
-  fontWeight: "bold",
-  fontSize: "0.85rem",
-  cursor: disabled ? "not-allowed" : "pointer",
-  transition: "all 0.2s ease",
-});

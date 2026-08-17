@@ -1,53 +1,83 @@
+// HowItWorks.tsx - Architecture & Documentation Modal with Lucide Icons
+import { BookOpen, Cpu, Zap, Share2, X, Activity } from 'lucide-react';
+
 export function HowItWorksModal({ onClose }: { onClose: () => void }) {
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'rgba(9, 9, 11, 0.85)', backdropFilter: 'blur(8px)' }} onClick={onClose}>
-      <div style={{ width: '100%', maxWidth: 720, background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 2000,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      background: 'rgba(9, 9, 11, 0.85)',
+      backdropFilter: 'blur(8px)'
+    }} onClick={onClose}>
+      <div style={{
+        width: '100%',
+        maxWidth: 760,
+        maxHeight: '85vh',
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 12,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '0 20px 50px rgba(0,0,0,0.6)'
+      }} onClick={(e) => e.stopPropagation()}>
+        
         {/* Header */}
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-elevated)' }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>System Architecture & Guide</h2>
-            <p className="label" style={{ marginTop: 4 }}>CoreWeaver Physics Engine Documentation</p>
+        <div style={{
+          padding: '16px 24px',
+          borderBottom: '1px solid var(--border-subtle)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'var(--bg-elevated)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <BookOpen size={16} color="var(--accent-blue)" />
+            <div>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
+                CoreWeaver Silicon Architecture Engine
+              </h2>
+              <div className="label" style={{ marginTop: 2, fontSize: 10 }}>
+                Cycle-Accurate Hardware Simulator Specification
+              </div>
+            </div>
           </div>
-          <button className="btn" onClick={onClose} style={{ padding: '6px 10px', fontSize: 12 }}>Close</button>
+          <button className="btn" onClick={onClose} style={{ padding: '4px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <X size={12} />
+            <span>Close</span>
+          </button>
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* Content Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
           
-          {/* Workflow Section */}
-          <Section title="01. Execution Workflows" subtitle="Two ways to configure the silicon">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <InfoCard 
-                title="Natural Language Compiler" 
-                desc="Describe your workload in plain English. The AI Agent (powered by Groq) parses your intent and extracts exact M, N, K dimensions and hardware profiles."
-                tag="AI Agent"
-              />
-              <InfoCard 
-                title="Manual Configuration" 
-                desc="Fine-tune matrix dimensions, threadblock sizes, and toggle micro-architectural features like async copy, kernel fusion, and warp divergence injection."
-                tag="Control Panel"
-              />
-            </div>
-          </Section>
+          <DocSection
+            icon={Cpu}
+            title="1. Hardware State Machine & 5-Stage Pipeline"
+            description="CoreWeaver evaluates each instruction through Fetch, Decode, Execute, Memory, and Writeback stages. Physical latencies (e.g. 400-cycle off-chip HBM vs 20-cycle SRAM) determine pipeline bubble injection and overall hardware occupancy."
+          />
 
-          {/* Profiler Section */}
-          <Section title="02. The Profiler Canvas" subtitle="Cycle-by-cycle telemetry and analysis">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <RowItem label="Execution Tab" value="Pipeline Gantt, Warp Divergence, and Token Stream generation." />
-              <RowItem label="Silicon Tab" value="Infrared thermal mapping and SRAM bus routing matrices." />
-              <RowItem label="Analysis Tab" value="Academic Roofline model, Nsight-style CUPTI counters, and FinOps cost analysis." />
-            </div>
-          </Section>
+          <DocSection
+            icon={Activity}
+            title="2. Infrared Thermal Diffusion & Hotspots"
+            description="Active Tensor Core compute generates localized heat across the 10x10 SM grid. A 2D thermodynamic diffusion model simulates thermal dissipation to copper heat sinks. Exceeding 90°C triggers automatic clock frequency halving (1500MHz -> 750MHz)."
+          />
 
-          {/* Sharing Section */}
-          <Section title="03. Enterprise Sharing" subtitle="Redis-backed state persistence">
-            <div style={{ padding: 16, background: 'var(--bg-base)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                Generate a secure, time-limited share link for your team. The link encapsulates your exact kernel configuration. 
-                Links are stored in a distributed Redis cache with a <span className="data" style={{ color: 'var(--accent-blue)' }}>1-hour TTL</span> and are automatically evicted to ensure zero state bloat.
-              </p>
-            </div>
-          </Section>
+          <DocSection
+            icon={Zap}
+            title="3. 32-Bank Shared Memory Bus & Bank Hazards"
+            description="Shared memory is partitioned into 32 independent 4-byte banks. When multiple threads within a 32-thread SIMT warp access different addresses residing on the same bank, memory requests are serialized, doubling latency."
+          />
+
+          <DocSection
+            icon={Share2}
+            title="4. Enterprise Telemetry & Cloud FinOps"
+            description="Every simulation exports cycle-by-cycle telemetry traces compatible with Python/Pandas analysis. The FinOps engine calculates exact wall-clock time and cloud GPU cost projections per 1,000,000 runs in USD and INR."
+          />
 
         </div>
       </div>
@@ -55,35 +85,24 @@ export function HowItWorksModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Section({ title, subtitle, children }: any) {
+function DocSection({ icon: Icon, title, description }: { icon: typeof Cpu, title: string, description: string }) {
   return (
-    <div>
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
-        <div className="label" style={{ marginTop: 2 }}>{subtitle}</div>
+    <div style={{
+      background: 'var(--bg-base)',
+      border: '1px solid var(--border-subtle)',
+      borderRadius: 8,
+      padding: 16,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-blue)' }}>
+        <Icon size={15} />
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</h3>
       </div>
-      {children}
-    </div>
-  );
-}
-
-function InfoCard({ title, desc, tag }: any) {
-  return (
-    <div style={{ padding: 16, background: 'var(--bg-base)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
-        <span className="label" style={{ fontSize: 9, padding: '2px 6px', background: 'var(--bg-elevated)', borderRadius: 4 }}>{tag}</span>
-      </div>
-      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.5, color: 'var(--text-tertiary)' }}>{desc}</p>
-    </div>
-  );
-}
-
-function RowItem({ label, value }: any) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-base)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{label}</span>
-      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+        {description}
+      </p>
     </div>
   );
 }

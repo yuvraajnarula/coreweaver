@@ -7,6 +7,11 @@ HARDWARE_PROFILES = {
         "peak_tflops": 312.0, "tdp_watts": 300.0, "max_regs_per_sm": 65536, 
         "max_threads_per_sm": 2048, "cost_per_hour": 3.50
     },
+    "H100_80GB": {
+        "vram_gb": 80.0, "name": "NVIDIA H100 SXM5 80GB", "bandwidth": 3350, "sram_kb": 228, 
+        "peak_tflops": 989.0, "tdp_watts": 700.0, "max_regs_per_sm": 65536, 
+        "max_threads_per_sm": 2048, "cost_per_hour": 4.50
+    },
     "RTX_4090": {
         "vram_gb": 24.0, "name": "NVIDIA RTX 4090 24GB", "bandwidth": 1008, "sram_kb": 100, 
         "peak_tflops": 330.0, "tdp_watts": 450.0, "max_regs_per_sm": 65536, 
@@ -16,6 +21,11 @@ HARDWARE_PROFILES = {
         "vram_gb": 24.0, "name": "NVIDIA RTX 3090 24GB", "bandwidth": 936, "sram_kb": 100, 
         "peak_tflops": 280.0, "tdp_watts": 350.0, "max_regs_per_sm": 65536, 
         "max_threads_per_sm": 1536, "cost_per_hour": 1.00
+    },
+    "MI300X": {
+        "vram_gb": 192.0, "name": "AMD Instinct MI300X 192GB", "bandwidth": 5300, "sram_kb": 256, 
+        "peak_tflops": 1300.0, "tdp_watts": 750.0, "max_regs_per_sm": 65536, 
+        "max_threads_per_sm": 2048, "cost_per_hour": 4.00
     },
     "T4_16GB": {
         "vram_gb": 16.0, "name": "NVIDIA T4 16GB", "bandwidth": 320, "sram_kb": 96, 
