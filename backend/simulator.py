@@ -188,11 +188,11 @@ class GPUPhysicsEngine:
 
         total_gflops = total_flops / 1e9
         target_temp_rise_math = min(70.0, total_gflops * 5.0) 
-        heat_per_math_cycle = target_temp_rise_math / math_cycles if math_cycles > 0 else 0
+        heat_per_math_cycle = (target_temp_rise_math / math_cycles) + 1.5 if math_cycles > 0 else 0
         
         total_gb = total_bytes / 1e9
         target_temp_rise_load = min(20.0, total_gb * 2.0) 
-        heat_per_load = target_temp_rise_load / load_cycles if load_cycles > 0 else 0
+        heat_per_load = (target_temp_rise_load / load_cycles) + 1.5 if load_cycles > 0 else 0
         heat_per_store = 3.0 
 
         regs_per_thread = 32 + (BLOCK_SIZE // 16) 

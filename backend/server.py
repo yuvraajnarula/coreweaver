@@ -35,6 +35,9 @@ async def simulation_handler(websocket):
                     
                     if 'finops_metrics' in result:
                         await websocket.send(json.dumps({"type": "FINOPS", "data": result['finops_metrics']}))
+                    
+                    if 'cupti_counters' in result:
+                        await websocket.send(json.dumps({"type": "CUPTI", "data": result['cupti_counters']}))
                         
                     total_cycles = len(result['timeline'])
                     target_duration_sec = 8.0 

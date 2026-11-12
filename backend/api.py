@@ -28,6 +28,33 @@ client = AsyncGroq(api_key=api_key) if api_key else None
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
+# In-Memory TTL Cache Fallback (operates seamlessly if Redis server is unavailable)
+import time
+_in_memory_cache: dict[str, tuple[float, str]] = {}
+
+async def cache_setex(key: str, ttl_seconds: int, value: str):
+    try:
+        await redis_client.setex(key, ttl_seconds, value)
+        return
+    except Exception:
+        pass
+    _in_memory_cache[key] = (time.time() + ttl_seconds, value)
+
+async def cache_get(key: str) -> str | None:
+    try:
+        val = await redis_client.get(key)
+        if val is not None:
+            return val
+    except Exception:
+        pass
+    item = _in_memory_cache.get(key)
+    if item:
+        expire_at, val = item
+        if time.time() < expire_at:
+            return val
+        del _in_memory_cache[key]
+    return None
+
 SHARE_TTL_SECONDS = 3600  # 1 Hour
 ARCH_TTL_SECONDS = 30 * 24 * 3600  # 30 Days for Custom Architectures
 
@@ -107,11 +134,11 @@ async def analyze_prompt(req: PromptRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# 🚀 NEW: ARCHITECTURE PERSISTENCE
+# 🚀 ARCHITECTURE PERSISTENCE
 @app.post("/api/architectures/save")
 async def save_architecture(payload: dict):
     arch_id = uuid.uuid4().hex[:12]
-    await redis_client.setex(
+    await cache_setex(
         f"arch:{arch_id}",
         ARCH_TTL_SECONDS,
         json.dumps(payload)
@@ -120,7 +147,7 @@ async def save_architecture(payload: dict):
 
 @app.get("/api/architectures/{arch_id}")
 async def get_architecture(arch_id: str):
-    val = await redis_client.get(f"arch:{arch_id}")
+    val = await cache_get(f"arch:{arch_id}")
     if not val:
         raise HTTPException(status_code=404, detail="Architecture not found or expired.")
     return json.loads(val)
@@ -142,12 +169,12 @@ async def compare_kernels(req: CompareRequest):
 @app.post("/api/share")
 async def create_share_link(req: ShareRequest):
     share_id = uuid.uuid4().hex[:12] 
-    await redis_client.setex(f"share:{share_id}", SHARE_TTL_SECONDS, json.dumps(req.params))
+    await cache_setex(f"share:{share_id}", SHARE_TTL_SECONDS, json.dumps(req.params))
     return {"share_id": share_id, "ttl_seconds": SHARE_TTL_SECONDS}
 
 @app.get("/api/share/{share_id}")
 async def get_share_link(share_id: str):
-    val = await redis_client.get(f"share:{share_id}")
+    val = await cache_get(f"share:{share_id}")
     if not val:
         raise HTTPException(status_code=404, detail="Link expired or not found.")
     return {"params": json.loads(val)}
