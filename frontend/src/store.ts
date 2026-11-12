@@ -143,6 +143,7 @@ interface SimulationState {
   rooflineMetrics: RooflineMetrics | null;
   occupancyMetrics: OccupancyMetrics | null;
   finopsMetrics: FinOpsMetrics | null;
+  cuptiCounters: Record<string, number> | null;
   
   // Comparison State
   comparisonResult: any | null;
@@ -154,6 +155,7 @@ interface SimulationState {
   setRooflineMetrics: (metrics: RooflineMetrics) => void;
   setOccupancyMetrics: (metrics: OccupancyMetrics) => void;
   setFinOpsMetrics: (metrics: FinOpsMetrics) => void;
+  setCuptiCounters: (counters: Record<string, number>) => void;
   setComparisonResult: (result: any) => void;
   connectionStatus: ConnectionStatus;
   setConnectionStatus: (status: ConnectionStatus) => void;
@@ -164,6 +166,7 @@ interface SimulationState {
     rooflineMetrics?: RooflineMetrics;
     finopsMetrics?: FinOpsMetrics;
     occupancyMetrics?: OccupancyMetrics;
+    cuptiCounters?: Record<string, number>;
     timeline: CycleData[];
     checkpoints?: StoryCheckpoint[];
   }) => void;
@@ -200,6 +203,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   rooflineMetrics: null,
   occupancyMetrics: null,
   finopsMetrics: null,
+  cuptiCounters: null,
   comparisonResult: null,
   connectionStatus: 'disconnected',
 
@@ -234,6 +238,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setRooflineMetrics: (metrics) => set({ rooflineMetrics: metrics }),
   setOccupancyMetrics: (metrics) => set({ occupancyMetrics: metrics }),
   setFinOpsMetrics: (metrics) => set({ finopsMetrics: metrics }),
+  setCuptiCounters: (counters) => set({ cuptiCounters: counters }),
   setComparisonResult: (result) => set({ comparisonResult: result }),
   
   loadFullSimulation: (data) => set({
@@ -245,6 +250,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     rooflineMetrics: data.rooflineMetrics || null,
     finopsMetrics: data.finopsMetrics || null,
     occupancyMetrics: data.occupancyMetrics || null,
+    cuptiCounters: data.cuptiCounters || null,
     checkpoints: data.checkpoints || [],
     isPlaying: false
   }),
@@ -258,6 +264,7 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     rooflineMetrics: null,
     occupancyMetrics: null,
     finopsMetrics: null,
+    cuptiCounters: null,
     checkpoints: [],
     isPlaying: false
   }),

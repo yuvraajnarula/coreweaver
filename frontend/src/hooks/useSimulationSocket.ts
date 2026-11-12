@@ -5,20 +5,22 @@ export function useSimulationSocket() {
   const { 
     addCycleToTimeline, setCurrentCycleIndex, clearTimeline, 
     setMetadata, setMemoryBreakdown, setRooflineMetrics, 
-    setOccupancyMetrics, setFinOpsMetrics, setConnectionStatus 
+    setOccupancyMetrics, setFinOpsMetrics, setCuptiCounters, setConnectionStatus 
   } = useSimulationStore();
   
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const WS_URL = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8765';
+
   useEffect(() => {
     const connect = () => {
       setConnectionStatus('reconnecting');
-      const ws = new WebSocket('ws://localhost:8765');
+      const ws = new WebSocket(WS_URL);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[CoreWeaver] Connected to Physics Engine');
+        console.log('[CoreWeaver] Connected to Physics Engine on', WS_URL);
         setConnectionStatus('connected');
       };
 
@@ -34,6 +36,8 @@ export function useSimulationSocket() {
             setRooflineMetrics(msg.data as RooflineMetrics);
           } else if (msg.type === 'FINOPS') {
             setFinOpsMetrics(msg.data as FinOpsMetrics);
+          } else if (msg.type === 'CUPTI') {
+            setCuptiCounters(msg.data as Record<string, number>);
           } else if (msg.type === 'CYCLE') {
             addCycleToTimeline(msg.data as CycleData);
             const currentLength = useSimulationStore.getState().timeline.length;
@@ -47,7 +51,7 @@ export function useSimulationSocket() {
       ws.onclose = () => {
         console.log('[CoreWeaver] Disconnected. Reconnecting in 3s...');
         setConnectionStatus('disconnected');
-        // 🚀 Auto-reconnect logic
+        // Auto-reconnect logic
         reconnectTimeoutRef.current = setTimeout(connect, 3000);
       };
 
@@ -63,13 +67,15 @@ export function useSimulationSocket() {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [addCycleToTimeline, setCurrentCycleIndex, setMetadata, setMemoryBreakdown, setRooflineMetrics, setOccupancyMetrics, setFinOpsMetrics, setConnectionStatus]);
+  }, [addCycleToTimeline, setCurrentCycleIndex, setMetadata, setMemoryBreakdown, setRooflineMetrics, setOccupancyMetrics, setFinOpsMetrics, setCuptiCounters, setConnectionStatus, WS_URL]);
 
-  const sendConfig = (params: any) => {
+  const sendConfig = (params: any, customArch?: any) => {
     clearTimeline(); 
     const trySend = () => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'CONFIG', params }));
+        const payload: any = { type: 'CONFIG', params };
+        if (customArch) payload.custom_arch = customArch;
+        wsRef.current.send(JSON.stringify(payload));
       } else if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
         setTimeout(trySend, 100); 
       } else {

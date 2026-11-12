@@ -61,6 +61,7 @@ export interface ClientSimulationResult {
   rooflineMetrics?: RooflineMetrics;
   finopsMetrics?: FinOpsMetrics;
   occupancyMetrics?: OccupancyMetrics;
+  cuptiCounters?: Record<string, number>;
   timeline: CycleData[];
   checkpoints: StoryCheckpointInfo[];
 }
@@ -247,10 +248,10 @@ export function runClientSimulation(params: any, customArch?: any): ClientSimula
 
   const totalGflops = totalFlops / 1e9;
   const targetTempRiseMath = Math.min(70.0, totalGflops * 5.0);
-  const heatPerMathCycle = mathCycles > 0 ? targetTempRiseMath / mathCycles : 0;
+  const heatPerMathCycle = mathCycles > 0 ? (targetTempRiseMath / mathCycles) + 1.5 : 0;
   const totalGb = totalBytes / 1e9;
   const targetTempRiseLoad = Math.min(20.0, totalGb * 2.0);
-  const heatPerLoad = loadCycles > 0 ? targetTempRiseLoad / loadCycles : 0;
+  const heatPerLoad = loadCycles > 0 ? (targetTempRiseLoad / loadCycles) + 1.5 : 0;
   const heatPerStore = 3.0;
 
   let currentTemp = 45.0;
@@ -417,9 +418,19 @@ export function runClientSimulation(params: any, customArch?: any): ClientSimula
   for (let i = 0; i < loadCycles; i++) {
     calculateDiffusion([10, 11, 20, 21], heatPerLoad);
     const isConflictNow = hasConflict && i === 1;
-    const sram: SramAccess[] = isConflictNow
-      ? [{ thread_id: 0, bank_id: 12, address: 1 }, { thread_id: 1, bank_id: 12, address: 2 }]
-      : [{ thread_id: 0, bank_id: 4, address: 0 }, { thread_id: 1, bank_id: 5, address: 0 }];
+    const sram: SramAccess[] = [];
+    for (let tid = 0; tid < 32; tid++) {
+      if (isConflictNow && (tid === 0 || tid === 1 || tid === 16 || tid === 17)) {
+        // Multiple threads collide on physical Bank 12
+        sram.push({ thread_id: tid, bank_id: 12, address: tid });
+      } else if (!isCoalesced) {
+        // Strided scattered distribution
+        sram.push({ thread_id: tid, bank_id: (tid * 4) % 32, address: Math.floor((tid * 4) / 32) });
+      } else {
+        // 1-to-1 coalesced alignment across 32 banks
+        sram.push({ thread_id: tid, bank_id: tid % 32, address: 0 });
+      }
+    }
 
     if (isConflictNow) {
       checkpoints.push({
@@ -429,7 +440,7 @@ export function runClientSimulation(params: any, customArch?: any): ClientSimula
         title: 'SRAM Bank Conflict Hazard',
         subtitle: 'Serialized Shared Memory Traffic',
         category: 'sram',
-        description: 'Two threads simultaneously addressed different rows in Bank 12. Hardware serialized memory access, doubling load latency and stalling the pipeline.',
+        description: 'Multiple threads in the 32-thread warp simultaneously addressed different words in Bank 12. The hardware cannot service them concurrently, forcing serialization and halving bandwidth.',
         metricsSnapshot: `+${Math.max(1, Math.floor(BLOCK_SIZE / 32)) * 50} Stalled Cycles | 50% Memory Throughput Penalty`
       });
     }
@@ -454,7 +465,11 @@ export function runClientSimulation(params: any, customArch?: any): ClientSimula
   const tensorIndices = [33, 34, 43, 44];
   for (let i = 0; i < mathCycles; i++) {
     calculateDiffusion(tensorIndices, heatPerMathCycle);
-    timeline.push(buildCycle('MMA_SYNC', 'Tensor Cores executing MAC operations', 11, [], false));
+    const mmaSram: SramAccess[] = [];
+    for (let tid = 0; tid < 32; tid++) {
+      mmaSram.push({ thread_id: tid, bank_id: (tid + i) % 32, address: i % 8 });
+    }
+    timeline.push(buildCycle('MMA_SYNC', 'Tensor Cores executing MAC operations', 11, mmaSram, false));
   }
 
   // Check for thermal throttle
@@ -528,6 +543,20 @@ export function runClientSimulation(params: any, customArch?: any): ClientSimula
     cost_per_million_runs: Math.round(kernelCostUsd * 1_000_000 * 100) / 100
   };
 
+  // 7. CUPTI Emulation Counters
+  const totalSectors = Math.floor(((memoryBreakdown.total_requested_gb || 0) * 1e9) / 128);
+  const cuptiCounters: Record<string, number> = {
+    "sm__warps_active.avg.pct_of_peak_sustained_active": occupancyMetrics.occupancy_pct,
+    "sm__registers_sum.per_cycle_active": occupancyMetrics.regs_per_thread * occupancyMetrics.active_warps,
+    "l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum": totalSectors,
+    "l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum": Math.floor(totalSectors * 0.2),
+    "sm__sass_thread_inst_executed_op_ffma_pred_on.sum": Math.floor(rooflineMetrics.achieved_gflops * 1e6),
+    "sm__inst_executed_pipe_tensor.sum": Math.floor(rooflineMetrics.achieved_gflops * 1e5),
+    "dram__sectors_read.sum": totalSectors,
+    "dram__sectors_write.sum": Math.floor(totalSectors * 0.5),
+    "gpu__time_duration.sum": Math.round(finopsMetrics.wall_clock_seconds * 1e6)
+  };
+
   return {
     metadata: {
       status,
@@ -539,6 +568,7 @@ export function runClientSimulation(params: any, customArch?: any): ClientSimula
     rooflineMetrics,
     finopsMetrics,
     occupancyMetrics,
+    cuptiCounters,
     timeline,
     checkpoints
   };

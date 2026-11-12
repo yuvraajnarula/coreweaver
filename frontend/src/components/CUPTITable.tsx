@@ -1,110 +1,138 @@
-import { useState } from 'react';
+// CUPTITable.tsx - NVIDIA Nsight Compute (CUPTI) Hardware Performance Counters
+import { useState, useMemo } from 'react';
 import { useSimulationStore } from '../store';
+import { Table, Filter, ArrowUpDown, Info } from 'lucide-react';
 
 interface CounterRow {
   name: string;
   value: number;
   unit: string;
+  formattedValue: string;
   description: string;
-  category: 'Memory' | 'Compute' | 'Occupancy' | 'Power';
-  trend?: number[]; // For sparkline
+  category: 'Memory' | 'Compute' | 'Occupancy' | 'Timing';
+  nsightCategory: string;
+  trend: number[];
 }
 
 export function CUPTITable() {
-  const { timeline, currentCycleIndex, metadata } = useSimulationStore();
+  const { timeline, currentCycleIndex, metadata, cuptiCounters, rooflineMetrics, finopsMetrics, occupancyMetrics } = useSimulationStore();
   const [sortField, setSortField] = useState<'name' | 'value'>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [hoveredCounter, setHoveredCounter] = useState<string | null>(null);
 
   const cycle = timeline[currentCycleIndex];
-  
   if (!cycle || !metadata) return null;
 
-  // Generate realistic CUPTI-style counters from simulation data
+  // Build live cycle trend arrays across the timeline up to currentCycleIndex
+  const history = useMemo(() => {
+    const activeSlice = timeline.slice(0, Math.max(1, currentCycleIndex + 1));
+    return {
+      clock: activeSlice.map(c => c.hardware_state.clock_speed_mhz),
+      power: activeSlice.map(c => c.micro_state.power_watts),
+      temp: activeSlice.map(c => c.hardware_state.current_temperature),
+      latency: activeSlice.map(c => c.pipeline_metrics.total_latency),
+      efficiency: activeSlice.map(c => c.pipeline_metrics.efficiency_pct)
+    };
+  }, [timeline, currentCycleIndex]);
+
+  // Industry-standard NVIDIA CUPTI Counters (as output by NVIDIA Nsight Compute 'ncu')
+  const totalSectors = cuptiCounters?.["l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum"] ?? 
+    Math.floor(((rooflineMetrics?.peak_mem_bw || 2034) * 1000) / 128);
+
   const counters: CounterRow[] = [
     {
-      name: 'dram__throughput.avg.pct_of_peak_sustained.elapsed',
-      value: cycle.hardware_state.sram_access.length * 8 / 600, // Mock calculation
+      name: 'sm__warps_active.avg.pct_of_peak_sustained_active',
+      value: cuptiCounters?.["sm__warps_active.avg.pct_of_peak_sustained_active"] ?? (occupancyMetrics?.occupancy_pct || 85.0),
       unit: '%',
-      description: 'DRAM throughput as percentage of peak',
-      category: 'Memory',
-      trend: [45, 48, 52, 49, 51, 53, 50]
-    },
-    {
-      name: 'l1tex__t_sectors_per_cycle.avg.pct_of_peak_sustained_elapsed',
-      value: 0.73,
-      unit: '',
-      description: 'L1 texture cache throughput',
-      category: 'Memory',
-      trend: [0.68, 0.71, 0.73, 0.72, 0.74, 0.73, 0.73]
-    },
-    {
-      name: 'smsp__sass_thread_inst_executed_op_ffma_pred_on',
-      value: cycle.pipeline_trace.reduce((sum, s) => sum + (s.stage.includes('EXECUTE') ? s.cycles * 32 : 0), 0),
-      unit: 'inst',
-      description: 'Fused multiply-add instructions executed',
-      category: 'Compute',
-      trend: [1024, 1156, 1089, 1203, 1178, 1245, 1203]
-    },
-    {
-      name: 'smsp__sass_thread_inst_executed_op_fadd_pred_on',
-      value: 856,
-      unit: 'inst',
-      description: 'Floating-point add instructions',
-      category: 'Compute',
-      trend: [823, 834, 845, 856, 849, 862, 856]
-    },
-    {
-      name: 'smsp__sass_thread_inst_executed_op_fmul_pred_on',
-      value: 912,
-      unit: 'inst',
-      description: 'Floating-point multiply instructions',
-      category: 'Compute',
-      trend: [890, 901, 908, 912, 910, 915, 912]
-    },
-    {
-      name: 'warp_executed',
-      value: metadata.occupancy_metrics?.active_warps || 0,
-      unit: 'warps',
-      description: 'Total warps executed',
+      formattedValue: `${(cuptiCounters?.["sm__warps_active.avg.pct_of_peak_sustained_active"] ?? occupancyMetrics?.occupancy_pct ?? 85.0).toFixed(1)}%`,
+      description: 'Percentage of theoretical peak active warps sustained during kernel execution.',
       category: 'Occupancy',
-      trend: [28, 29, 30, 31, 30, 31, 31]
+      nsightCategory: 'SM Occupancy',
+      trend: history.efficiency.length > 1 ? history.efficiency : [75, 80, 85, 85, 88]
     },
     {
-      name: 'achieved_occupancy',
-      value: metadata.occupancy_metrics?.occupancy_pct || 0,
-      unit: '%',
-      description: 'Percentage of active warps',
-      category: 'Occupancy',
-      trend: [85, 87, 88, 89, 88, 90, 89]
-    },
-    {
-      name: 'registers_per_thread',
-      value: metadata.occupancy_metrics?.regs_per_thread || 0,
+      name: 'sm__registers_sum.per_cycle_active',
+      value: cuptiCounters?.["sm__registers_sum.per_cycle_active"] ?? ((occupancyMetrics?.regs_per_thread || 32) * (occupancyMetrics?.active_warps || 32)),
       unit: 'regs',
-      description: 'Registers allocated per thread',
+      formattedValue: (cuptiCounters?.["sm__registers_sum.per_cycle_active"] ?? ((occupancyMetrics?.regs_per_thread || 32) * (occupancyMetrics?.active_warps || 32))).toLocaleString(),
+      description: 'Total live registers allocated and held across all concurrent warps on the SM.',
       category: 'Occupancy',
-      trend: [24, 24, 24, 24, 24, 24, 24]
+      nsightCategory: 'Register Pressure',
+      trend: [24, 28, 32, 32, 32]
     },
     {
-      name: 'power_draw',
-      value: cycle.micro_state.power_watts,
-      unit: 'W',
-      description: 'Instantaneous power consumption',
-      category: 'Power',
-      trend: [245, 251, 248, 253, 250, 255, 253]
+      name: 'sm__inst_executed_pipe_tensor.sum',
+      value: cuptiCounters?.["sm__inst_executed_pipe_tensor.sum"] ?? Math.floor((rooflineMetrics?.achieved_gflops || 100) * 1e5),
+      unit: 'inst',
+      formattedValue: (cuptiCounters?.["sm__inst_executed_pipe_tensor.sum"] ?? Math.floor((rooflineMetrics?.achieved_gflops || 100) * 1e5)).toLocaleString(),
+      description: 'Matrix Multiply-Accumulate (MMA) instructions executed on physical Tensor Cores.',
+      category: 'Compute',
+      nsightCategory: 'Tensor Pipeline',
+      trend: history.latency.length > 1 ? history.latency : [100, 200, 450, 600]
     },
     {
-      name: 'gpu_utilization',
-      value: cycle.hardware_state.clock_speed_mhz / 1410 * 100,
-      unit: '%',
-      description: 'GPU utilization percentage',
-      category: 'Power',
-      trend: [92, 94, 93, 95, 94, 96, 95]
+      name: 'sm__sass_thread_inst_executed_op_ffma_pred_on.sum',
+      value: cuptiCounters?.["sm__sass_thread_inst_executed_op_ffma_pred_on.sum"] ?? Math.floor((rooflineMetrics?.achieved_gflops || 100) * 1e6),
+      unit: 'inst',
+      formattedValue: (cuptiCounters?.["sm__sass_thread_inst_executed_op_ffma_pred_on.sum"] ?? Math.floor((rooflineMetrics?.achieved_gflops || 100) * 1e6)).toLocaleString(),
+      description: 'SASS assembly Fused Multiply-Add (FFMA) operations retired with predicate=True.',
+      category: 'Compute',
+      nsightCategory: 'ALU Pipeline',
+      trend: [512, 1024, 2048, 4096]
+    },
+    {
+      name: 'l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum',
+      value: totalSectors,
+      unit: 'sectors',
+      formattedValue: totalSectors.toLocaleString(),
+      description: '32-byte memory sectors requested through the L1/Texture cache by global load instructions.',
+      category: 'Memory',
+      nsightCategory: 'Memory L1/LSU',
+      trend: history.power.length > 1 ? history.power : [30, 45, 60, 65]
+    },
+    {
+      name: 'l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum',
+      value: Math.floor(totalSectors * 0.2),
+      unit: 'sectors',
+      formattedValue: Math.floor(totalSectors * 0.2).toLocaleString(),
+      description: '32-byte memory sectors written back through the LSU pipeline to global memory.',
+      category: 'Memory',
+      nsightCategory: 'Memory L1/LSU',
+      trend: [10, 15, 20, 25]
+    },
+    {
+      name: 'dram__sectors_read.sum',
+      value: totalSectors,
+      unit: 'sectors',
+      formattedValue: totalSectors.toLocaleString(),
+      description: 'Physical 32-byte sectors transferred from off-chip DRAM/HBM into the memory controller.',
+      category: 'Memory',
+      nsightCategory: 'DRAM / HBM',
+      trend: [100, 250, 500, 800]
+    },
+    {
+      name: 'dram__sectors_write.sum',
+      value: Math.floor(totalSectors * 0.5),
+      unit: 'sectors',
+      formattedValue: Math.floor(totalSectors * 0.5).toLocaleString(),
+      description: 'Physical 32-byte sectors written back from memory controller into off-chip DRAM/HBM.',
+      category: 'Memory',
+      nsightCategory: 'DRAM / HBM',
+      trend: [50, 120, 250, 400]
+    },
+    {
+      name: 'gpu__time_duration.sum',
+      value: Math.round((finopsMetrics?.wall_clock_seconds || 0.001) * 1e6),
+      unit: 'µs',
+      formattedValue: `${Math.round((finopsMetrics?.wall_clock_seconds || 0.001) * 1e6).toLocaleString()} µs`,
+      description: 'Total elapsed GPU hardware execution time in microseconds (dividing cycles by base clock frequency).',
+      category: 'Timing',
+      nsightCategory: 'Wall Clock',
+      trend: history.clock.length > 1 ? history.clock : [1500, 1500, 1500]
     }
   ];
 
-  // Filter and sort
   let filtered = counters;
   if (filterCategory !== 'all') {
     filtered = counters.filter(c => c.category === filterCategory);
@@ -114,10 +142,9 @@ export function CUPTITable() {
     const comparison = sortField === 'name' 
       ? a.name.localeCompare(b.name) 
       : a.value - b.value;
-      
     return sortDirection === 'asc' ? comparison : -comparison;
   });
-  
+
   const handleSort = (field: 'name' | 'value') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -127,144 +154,133 @@ export function CUPTITable() {
     }
   };
 
-  // Sparkline component
-  const Sparkline = ({ data, color = '#3b82f6' }: { data: number[]; color?: string }) => {
+  const Sparkline = ({ data, color = 'var(--accent-blue)' }: { data: number[]; color?: string }) => {
     const min = Math.min(...data);
     const max = Math.max(...data);
     const range = max - min || 1;
-    const width = 60;
-    const height = 20;
+    const width = 64;
+    const height = 18;
     
     const points = data.map((val, i) => {
-      const x = (i / (data.length - 1)) * width;
-      const y = height - ((val - min) / range) * height;
-      return `${x},${y}`;
+      const x = (i / Math.max(1, data.length - 1)) * width;
+      const y = height - ((val - min) / range) * (height - 4) - 2;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
 
     return (
-      <svg width={width} height={height} style={{ marginLeft: 8 }}>
+      <svg width={width} height={height} style={{ overflow: 'visible' }}>
         <polyline
-          points={points}
           fill="none"
           stroke={color}
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
+          points={points}
         />
       </svg>
     );
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <div className="label">Hardware Performance Counters</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>Nsight Compute Profile</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Category filter bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(['all', 'Occupancy', 'Compute', 'Memory', 'Timing'] as const).map(cat => (
+            <button
+              key={cat}
+              onClick={() => setFilterCategory(cat)}
+              className="btn"
+              style={{
+                padding: '3px 8px',
+                fontSize: 11,
+                background: filterCategory === cat ? 'var(--bg-elevated)' : 'transparent',
+                borderColor: filterCategory === cat ? 'var(--accent-blue)' : 'var(--border-subtle)',
+                color: filterCategory === cat ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                fontWeight: filterCategory === cat ? 600 : 400
+              }}
+            >
+              {cat.toUpperCase()}
+            </button>
+          ))}
         </div>
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          style={{
-            padding: '6px 10px',
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 4,
-            color: 'var(--text-primary)',
-            fontSize: 12,
-            fontFamily: 'var(--font-mono)',
-            cursor: 'pointer'
-          }}
-        >
-          <option value="all">All Categories</option>
-          <option value="Memory">Memory</option>
-          <option value="Compute">Compute</option>
-          <option value="Occupancy">Occupancy</option>
-          <option value="Power">Power</option>
-        </select>
+
+        <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+          Emulating NVIDIA Nsight Compute (`ncu --csv --metrics`)
+        </span>
       </div>
 
+      {/* Main CUPTI Counter Table */}
       <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
           <thead>
             <tr style={{ background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border-subtle)' }}>
-              <th
+              <th 
                 onClick={() => handleSort('name')}
-                style={{
-                  padding: '10px 12px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}
+                style={{ textAlign: 'left', padding: '8px 12px', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 600 }}
               >
-                Counter Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>METRIC NAME (CUPTI IDENTIFIER)</span>
+                  <ArrowUpDown size={11} />
+                </div>
               </th>
-              <th
+              <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600 }}>CATEGORY</th>
+              <th 
                 onClick={() => handleSort('value')}
-                style={{
-                  padding: '10px 12px',
-                  textAlign: 'right',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  color: 'var(--text-secondary)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}
+                style={{ textAlign: 'right', padding: '8px 12px', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 600 }}
               >
-                Value {sortField === 'value' && (sortDirection === 'asc' ? '↑' : '↓')}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                  <span>MEASURED VALUE</span>
+                  <ArrowUpDown size={11} />
+                </div>
               </th>
-              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Trend
-              </th>
-              <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Description
-              </th>
+              <th style={{ textAlign: 'center', padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, width: 80 }}>TREND</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((counter, i) => (
-              <tr
-                key={i}
-                style={{
-                  borderBottom: '1px solid var(--border-subtle)',
-                  background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                  transition: 'background 0.1s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'}
-              >
-                <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)' }}>
-                  {counter.name}
-                </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-primary)', fontWeight: 500 }}>
-                  {typeof counter.value === 'number' && counter.value % 1 !== 0 ? counter.value.toFixed(2) : counter.value}
-                  <span style={{ color: 'var(--text-tertiary)', marginLeft: 4 }}>{counter.unit}</span>
-                </td>
-                <td style={{ padding: '10px 12px' }}>
-                  {counter.trend && <Sparkline data={counter.trend} color={counter.category === 'Memory' ? '#f59e0b' : counter.category === 'Compute' ? '#10b981' : counter.category === 'Power' ? '#ef4444' : '#3b82f6'} />}
-                </td>
-                <td style={{ padding: '10px 12px', color: 'var(--text-tertiary)', fontSize: 11 }}>
-                  {counter.description}
-                </td>
-              </tr>
-            ))}
+            {sorted.map((counter, i) => {
+              const isHovered = hoveredCounter === counter.name;
+              return (
+                <tr 
+                  key={counter.name}
+                  onMouseEnter={() => setHoveredCounter(counter.name)}
+                  onMouseLeave={() => setHoveredCounter(null)}
+                  style={{ 
+                    borderBottom: i < sorted.length - 1 ? '1px solid var(--border-subtle)' : 'none',
+                    background: isHovered ? 'var(--bg-elevated)' : 'transparent',
+                    transition: 'background 0.1s ease'
+                  }}
+                >
+                  <td style={{ padding: '8px 12px' }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{counter.name}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2, fontFamily: 'sans-serif' }}>
+                      {counter.description}
+                    </div>
+                  </td>
+                  <td style={{ padding: '8px 12px' }}>
+                    <span style={{ 
+                      fontSize: 9, 
+                      padding: '2px 6px', 
+                      borderRadius: 3, 
+                      background: 'var(--bg-base)', 
+                      border: '1px solid var(--border-subtle)',
+                      color: counter.category === 'Compute' ? 'var(--accent-green)' : counter.category === 'Memory' ? 'var(--accent-amber)' : 'var(--accent-blue)',
+                      fontWeight: 600 
+                    }}>
+                      {counter.nsightCategory}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {counter.formattedValue}
+                  </td>
+                  <td style={{ textAlign: 'center', padding: '8px 12px' }}>
+                    <Sparkline data={counter.trend} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-      </div>
-
-      <div style={{ marginTop: 12, display: 'flex', gap: 24, fontSize: 11, color: 'var(--text-tertiary)' }}>
-        <span>Showing {sorted.length} counters</span>
-        <span>•</span>
-        <span>Hardware: {metadata.hardware_profile}</span>
-        <span>•</span>
-        <span>Cycle: {cycle.cycle}</span>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 // FinOpsDashboard.tsx - Cloud FinOps & Cost Projection Dashboard with Lucide Icons
 import { useSimulationStore } from '../store';
-import { DollarSign, Clock, Activity, Server } from 'lucide-react';
+import { DollarSign, Clock, Activity, Server, Lightbulb, Coins } from 'lucide-react';
 
 const USD_TO_INR = 95.33;
 
